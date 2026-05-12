@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy.exc import IntegrityError
+
 from domain.session.acl.connection_manager import ConnectionManager
 from domain.session.model.session_timeline_event import SessionTimelineEvent
 from domain.session.repository.session_timeline_event_repository import SessionTimelineEventRepository
+
+_MAX_SEQ_RETRIES = 3
 
 
 class SessionTimelineEventService:
@@ -29,17 +33,26 @@ class SessionTimelineEventService:
         commit: bool = False,
         emit: bool = True,
     ) -> SessionTimelineEvent:
-        seq = await self._repository.next_seq(session_id, run_id)
-        event = SessionTimelineEvent.create(
-            session_id=session_id,
-            run_id=run_id,
-            seq=seq,
-            event_type=event_type,
-            title=title,
-            payload=payload,
-            status=status,
-        )
-        await self._repository.save(event)
+        last_err: Exception | None = None
+        for _ in range(_MAX_SEQ_RETRIES):
+            seq = await self._repository.next_seq(session_id, run_id)
+            event = SessionTimelineEvent.create(
+                session_id=session_id,
+                run_id=run_id,
+                seq=seq,
+                event_type=event_type,
+                title=title,
+                payload=payload,
+                status=status,
+            )
+            try:
+                await self._repository.save(event)
+                break
+            except IntegrityError as exc:
+                last_err = exc
+                continue
+        else:
+            raise last_err  # type: ignore[misc]
         if commit:
             await self._repository.commit()
         if emit and self._connection_manager is not None:
