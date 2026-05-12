@@ -15,6 +15,7 @@ from domain.shared.async_utils import safe_create_task
 from application.project.command.create_project_command import CreateProjectCommand
 from application.project.command.init_plugin_command import InitPluginCommand
 from application.project.command.reorder_projects_command import ReorderProjectsCommand
+from application.team_task.command.create_team_project_command import CreateTeamProjectCommand
 from application.session.command.create_session_command import CreateSessionCommand
 from application.session.command.run_query_command import RunQueryCommand
 from domain.session.acl.connection_manager import ConnectionManager
@@ -163,10 +164,87 @@ class ProjectApplicationService:
     async def list_projects(self) -> list[Project]:
         return await self._project_repository.find_all()
 
+    async def create_team_project(self, command: CreateTeamProjectCommand) -> Project:
+        config = command.team_config
+        mode = config.get("mode")
+        if mode not in ("delegation", "collaboration"):
+            raise BusinessException("Invalid team mode, must be 'delegation' or 'collaboration'", "INVALID_TEAM_MODE")
+
+        members = config.get("pipeline" if mode == "delegation" else "members", [])
+        if not members:
+            raise BusinessException("Team must have at least one member", "TEAM_NO_MEMBERS")
+
+        seen_project_ids = set()
+        for member in members:
+            pid = member.get("project_id")
+            if not pid:
+                raise BusinessException("Each member must reference a project_id", "MEMBER_NO_PROJECT")
+            if pid in seen_project_ids:
+                raise BusinessException(f"Duplicate project_id in team: {pid}", "DUPLICATE_MEMBER")
+            seen_project_ids.add(pid)
+            sub_project = await self._project_repository.find_by_id(pid)
+            if sub_project is None:
+                raise BusinessException(f"Sub-project not found: {pid}", "SUB_PROJECT_NOT_FOUND")
+            if sub_project.project_type == "team":
+                raise BusinessException(f"Cannot use a team project as a sub-project: {pid}", "NESTED_TEAM")
+
+        dir_path = command.dir_path.strip()
+        if not dir_path or not os.path.isabs(dir_path):
+            raise BusinessException("dir_path must be an absolute path", "INVALID_DIR_PATH")
+
+        project = Project.create(
+            name=command.name.strip(),
+            dir_path=dir_path,
+            project_type="team",
+            team_config=config,
+        )
+        await self._project_repository.save(project)
+        logger.info("Team project created: id=%s, name=%s, mode=%s", project.id, project.name, mode)
+        return project
+
+    async def get_team_overview(self, project_id: str) -> dict:
+        project = await self._project_repository.find_by_id(project_id)
+        if project is None:
+            raise BusinessException("Project not found", "PROJECT_NOT_FOUND")
+        if project.project_type != "team":
+            raise BusinessException("Not a team project", "NOT_TEAM_PROJECT")
+
+        config = project.team_config
+        mode = config.get("mode", "delegation")
+        members_cfg = config.get("pipeline" if mode == "delegation" else "members", [])
+
+        members = []
+        for m in members_cfg:
+            sub = await self._project_repository.find_by_id(m.get("project_id", ""))
+            members.append({
+                "project_id": m.get("project_id", ""),
+                "project_name": sub.name if sub else "(deleted)",
+                "project_dir": sub.dir_path if sub else "",
+                "role": m.get("role", ""),
+                "role_label": m.get("role_label", ""),
+            })
+
+        return {
+            "project_id": project.id,
+            "project_name": project.name,
+            "mode": mode,
+            "members": members,
+        }
+
     async def get_project(self, project_id: str) -> Project:
         project = await self._project_repository.find_by_id(project_id)
         if project is None:
             raise BusinessException("Project not found", "PROJECT_NOT_FOUND")
+        return project
+
+    async def update_team_config(self, project_id: str, team_config: dict) -> Project:
+        project = await self._project_repository.find_by_id(project_id)
+        if project is None:
+            raise BusinessException("Project not found", "PROJECT_NOT_FOUND")
+        if project.project_type != "team":
+            raise BusinessException("Not a team project", "NOT_TEAM_PROJECT")
+        project.update_team_config(team_config)
+        await self._project_repository.save(project)
         return project
 
     async def get_sessions_by_project(self, project_id: str) -> list:
@@ -341,6 +419,14 @@ class ProjectApplicationService:
         raw = await asyncio.to_thread(file_path.read_bytes)
         rel_path = file_path.relative_to(root).as_posix()
         return self._workspace_content_response(rel_path, raw)
+
+    async def read_workspace_file_raw(self, project_id: str, path: str) -> Path:
+        project = await self.get_project(project_id)
+        root = Path(project.dir_path).resolve()
+        file_path = self._resolve_workspace_path(root, path)
+        if not file_path.is_file():
+            raise BusinessException("File not found", "FILE_NOT_FOUND")
+        return file_path
 
     async def get_workspace_diff(self, project_id: str, path: str) -> dict[str, Any]:
         project = await self.get_project(project_id)

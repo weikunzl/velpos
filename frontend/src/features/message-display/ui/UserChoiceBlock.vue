@@ -10,8 +10,19 @@ const emit = defineEmits(['answer'])
 
 // Track selected answers per question
 const selections = ref({})
+// Track "Other" free-text input per question
+const otherTexts = ref({})
+const OTHER_LABEL = '__other__'
 
 const questions = computed(() => props.block.input?.questions || [])
+
+function hasBuiltinOther(q) {
+  return (q.options || []).some(opt => opt.label.toLowerCase() === 'other')
+}
+
+function isOtherOpt(opt) {
+  return opt.label.toLowerCase() === 'other'
+}
 
 function toggleOption(qIdx, optLabel, multiSelect) {
   const key = `q${qIdx}`
@@ -36,10 +47,23 @@ function isSelected(qIdx, optLabel, multiSelect) {
   return val === optLabel
 }
 
+function isOtherSelected(qIdx, multiSelect) {
+  return isSelected(qIdx, OTHER_LABEL, multiSelect)
+}
+
 function hasAnswered(qIdx) {
   const key = `q${qIdx}`
   const val = selections.value[key]
-  if (Array.isArray(val)) return val.length > 0
+  if (Array.isArray(val)) {
+    if (val.length === 0) return false
+    if (val.includes(OTHER_LABEL)) {
+      return !!(otherTexts.value[key] || '').trim()
+    }
+    return true
+  }
+  if (val === OTHER_LABEL) {
+    return !!(otherTexts.value[key] || '').trim()
+  }
   return !!val
 }
 
@@ -51,7 +75,15 @@ function submitAnswers() {
   const answers = {}
   questions.value.forEach((q, i) => {
     const key = `q${i}`
-    answers[q.question] = selections.value[key] || ''
+    const val = selections.value[key]
+    if (Array.isArray(val)) {
+      const resolved = val.map(v => v === OTHER_LABEL ? (otherTexts.value[key] || '').trim() : v)
+      answers[q.question] = resolved.join(', ')
+    } else if (val === OTHER_LABEL) {
+      answers[q.question] = (otherTexts.value[key] || '').trim()
+    } else {
+      answers[q.question] = val || ''
+    }
   })
   emit('answer', { answers })
 }
@@ -75,32 +107,89 @@ function submitAnswers() {
       <div class="question-text">{{ q.question }}</div>
 
       <div class="options-list">
+        <template v-for="(opt, oIdx) in (q.options || [])" :key="oIdx">
+          <button
+            v-if="!isOtherOpt(opt)"
+            class="option-btn"
+            :class="{
+              'option-selected': isSelected(qIdx, opt.label, q.multiSelect),
+              'option-multi': q.multiSelect,
+            }"
+            :disabled="answered"
+            @click="toggleOption(qIdx, opt.label, q.multiSelect)"
+          >
+            <span class="option-indicator">
+              <span v-if="q.multiSelect" class="checkbox">
+                <svg v-if="isSelected(qIdx, opt.label, true)" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                </svg>
+              </span>
+              <span v-else class="radio">
+                <span v-if="isSelected(qIdx, opt.label, false)" class="radio-dot"/>
+              </span>
+            </span>
+            <span class="option-content">
+              <span class="option-label">{{ opt.label }}</span>
+              <span v-if="opt.description" class="option-desc">{{ opt.description }}</span>
+            </span>
+          </button>
+
+          <button
+            v-else
+            class="option-btn option-other"
+            :class="{ 'option-selected': isOtherSelected(qIdx, q.multiSelect) }"
+            :disabled="answered"
+            @click="toggleOption(qIdx, OTHER_LABEL, q.multiSelect)"
+          >
+            <span class="option-indicator">
+              <span v-if="q.multiSelect" class="checkbox">
+                <svg v-if="isOtherSelected(qIdx, true)" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                </svg>
+              </span>
+              <span v-else class="radio">
+                <span v-if="isOtherSelected(qIdx, false)" class="radio-dot"/>
+              </span>
+            </span>
+            <span class="option-content">
+              <span class="option-label">Other</span>
+              <span class="option-desc">{{ opt.description || 'Provide your own answer' }}</span>
+            </span>
+          </button>
+        </template>
+
         <button
-          v-for="(opt, oIdx) in (q.options || [])"
-          :key="oIdx"
-          class="option-btn"
-          :class="{
-            'option-selected': isSelected(qIdx, opt.label, q.multiSelect),
-            'option-multi': q.multiSelect,
-          }"
+          v-if="!hasBuiltinOther(q)"
+          class="option-btn option-other"
+          :class="{ 'option-selected': isOtherSelected(qIdx, q.multiSelect) }"
           :disabled="answered"
-          @click="toggleOption(qIdx, opt.label, q.multiSelect)"
+          @click="toggleOption(qIdx, OTHER_LABEL, q.multiSelect)"
         >
           <span class="option-indicator">
             <span v-if="q.multiSelect" class="checkbox">
-              <svg v-if="isSelected(qIdx, opt.label, true)" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <svg v-if="isOtherSelected(qIdx, true)" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
               </svg>
             </span>
             <span v-else class="radio">
-              <span v-if="isSelected(qIdx, opt.label, false)" class="radio-dot"/>
+              <span v-if="isOtherSelected(qIdx, false)" class="radio-dot"/>
             </span>
           </span>
           <span class="option-content">
-            <span class="option-label">{{ opt.label }}</span>
-            <span v-if="opt.description" class="option-desc">{{ opt.description }}</span>
+            <span class="option-label">Other</span>
+            <span class="option-desc">Provide your own answer</span>
           </span>
         </button>
+      </div>
+
+      <div v-if="isOtherSelected(qIdx, q.multiSelect) && !answered" class="other-input-wrap">
+        <textarea
+          class="other-input"
+          :value="otherTexts[`q${qIdx}`] || ''"
+          @input="otherTexts[`q${qIdx}`] = $event.target.value"
+          placeholder="Type your answer here..."
+          rows="2"
+        />
       </div>
     </div>
 
@@ -296,5 +385,33 @@ function submitAnswers() {
   color: var(--green);
   font-size: 12px;
   font-weight: 600;
+}
+
+.other-input-wrap {
+  margin-top: 8px;
+  padding-left: 26px;
+}
+
+.other-input {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 40px;
+}
+
+.other-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-dim);
+}
+
+.other-input::placeholder {
+  color: var(--text-muted);
 }
 </style>

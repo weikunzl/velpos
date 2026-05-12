@@ -29,6 +29,12 @@ class ProjectModel(Base):
     sort_order: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0",
     )
+    project_type: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="single", server_default="single",
+    )
+    team_config_json: Mapped[dict | None] = mapped_column(
+        JSON, nullable=True, default=None,
+    )
     active_claude_md_revision_id: Mapped[str] = mapped_column(
         String(8), nullable=False, default="", server_default="",
     )

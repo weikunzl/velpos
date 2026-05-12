@@ -12,6 +12,8 @@ from ohs.http.dto.agent_dto import (
     AgentInfo,
     AgentListResponse,
     LoadAgentRequest,
+    TeamTemplateInfo,
+    TeamTemplateListResponse,
     UnloadAgentRequest,
 )
 from ohs.http.dto.project_dto import ProjectResponse
@@ -41,6 +43,17 @@ async def list_agents(
     return ApiResponse.success(AgentListResponse(categories=categories))
 
 
+@router.get("/teams/templates", summary="List team templates")
+async def list_team_templates(
+    service: ServiceDep,
+    language: str = Query(default="en", pattern="^(en|zh)$"),
+    mode: str | None = Query(default=None, pattern="^(delegation|collaboration)$"),
+) -> ApiResponse[TeamTemplateListResponse]:
+    result = await service.list_team_templates(language, mode)
+    templates = [TeamTemplateInfo(**template) for template in result["templates"]]
+    return ApiResponse.success(TeamTemplateListResponse(templates=templates))
+
+
 @router.post("/projects/{project_id}/load", summary="Load agent for project")
 async def load_agent(
     project_id: str,
@@ -50,6 +63,18 @@ async def load_agent(
 ) -> ApiResponse[ProjectResponse]:
     project = await service.load_agent(
         project_id, request.agent_id, request.language, project_repo,
+    )
+    return ApiResponse.success(ProjectResponse.from_domain(project))
+
+
+@router.post("/projects/{project_id}/update", summary="Update current agent (re-apply prompt & plugins)")
+async def update_agent(
+    project_id: str,
+    service: ServiceDep,
+    project_repo=Depends(get_project_repository),
+) -> ApiResponse[ProjectResponse]:
+    project = await service.update_agent(
+        project_id, project_repo,
     )
     return ApiResponse.success(ProjectResponse.from_domain(project))
 

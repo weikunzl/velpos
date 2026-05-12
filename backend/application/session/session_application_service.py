@@ -925,6 +925,69 @@ class SessionApplicationService:
             },
         )
 
+    async def _resolve_team_connect_config(self, session: Session) -> dict[str, Any]:
+        """If session is a team coordinator, return MCP servers + system_prompt.
+
+        Returns empty dict for non-team sessions or worker sessions.
+        """
+        if not self._project_repository:
+            return {}
+        if session.team_task_id:
+            return {}
+
+        project = await self._project_repository.find_by_id(session.project_id)
+        if not project or project.project_type != "team":
+            return {}
+
+        from application.team_task.prompt_builder import build_coordinator_system_prompt
+        from application.team_task.team_coordinator_service import TeamCoordinatorService
+        from infr.client.team_mcp_server import create_team_coordinator_mcp
+        from infr.repository.team_task_repository_impl import TeamTaskRepositoryImpl
+
+        agent_service = None
+        try:
+            from application.agent.agent_application_service import AgentApplicationService
+            from application.memory.claude_md_revision_application_service import ClaudeMdRevisionApplicationService
+            from infr.client.claude_plugin_manager import ClaudePluginManager
+            from infr.repository.claude_md_revision_repository_impl import ClaudeMdRevisionRepositoryImpl
+            from infr.repository.project_repository_impl import ProjectRepositoryImpl as ProjRepoImpl
+
+            db_session = self._session_repository._session
+            revision_service = ClaudeMdRevisionApplicationService(
+                revision_repository=ClaudeMdRevisionRepositoryImpl(db_session),
+                project_repository=ProjRepoImpl(db_session),
+            )
+            agent_service = AgentApplicationService(
+                plugin_manager=ClaudePluginManager(),
+                claude_md_revision_service=revision_service,
+            )
+        except Exception:
+            logger.warning("Failed to create AgentApplicationService for team coordinator", exc_info=True)
+
+        coordinator_service = TeamCoordinatorService(
+            project_repository=self._project_repository,
+            session_repository=self._session_repository,
+            team_task_repository=TeamTaskRepositoryImpl(self._session_repository._session),
+            claude_agent_gateway=self._claude_agent_gateway,
+            connection_manager=self._connection_manager,
+            agent_application_service=agent_service,
+        )
+
+        trace_id = uuid.uuid4().hex[:8]
+
+        mcp_server = create_team_coordinator_mcp(
+            coordinator_service=coordinator_service,
+            project_id=project.id,
+            coordinator_session_id=session.session_id,
+            trace_id=trace_id,
+        )
+
+        return {
+            "system_prompt": build_coordinator_system_prompt(project),
+            "mcp_servers": {"team_coordinator": mcp_server},
+            "trace_id": trace_id,
+        }
+
     async def run_claude_query(self, command: RunQueryCommand) -> None:
         """Execute a Claude query using persistent SDK connection.
 
@@ -1055,6 +1118,23 @@ class SessionApplicationService:
                 _prepare_sdk_connection(),
             )
 
+            # Resolve team MCP config for coordinator sessions
+            team_config = await self._resolve_team_connect_config(session)
+
+            # Create trace file for team coordinator sessions
+            trace_id = team_config.get("trace_id", "")
+            if trace_id:
+                from application.team_task.trace_file_manager import TraceFileManager
+                await TraceFileManager.create_trace(
+                    project_dir=session.project_dir,
+                    trace_id=trace_id,
+                    requirement=actual_prompt,
+                    coordinator_session_id=session.session_id,
+                    project_id=session.project_id,
+                )
+                session.update_trace_id(trace_id)
+                await self._save_session(session, commit=True)
+
             msg_stream = None
             if is_connected:
                 try:
@@ -1079,6 +1159,8 @@ class SessionApplicationService:
                     prompt=actual_prompt,
                     cwd=session.project_dir,
                     sdk_session_id=resume_sdk_session_id,
+                    system_prompt=team_config.get("system_prompt"),
+                    mcp_servers=team_config.get("mcp_servers"),
                 )
 
             try:
@@ -1120,6 +1202,8 @@ class SessionApplicationService:
                         prompt=actual_prompt,
                         cwd=session.project_dir,
                         sdk_session_id=resume_sdk_session_id,
+                        system_prompt=team_config.get("system_prompt"),
+                        mcp_servers=team_config.get("mcp_servers"),
                     )
                     await self._consume_message_stream(session, msg_stream, run_id)
                 else:
@@ -1135,6 +1219,14 @@ class SessionApplicationService:
                 return
 
             session.complete_query()
+
+            # Complete trace for team coordinator sessions
+            if session.trace_id:
+                from application.team_task.trace_file_manager import TraceFileManager
+                await TraceFileManager.complete_trace(
+                    project_dir=session.project_dir,
+                    trace_id=session.trace_id,
+                )
 
             # Fire outbound IM sync in background (only for web UI path)
             if self._on_assistant_response:
@@ -1183,6 +1275,15 @@ class SessionApplicationService:
                 exc_info=True,
             )
             session.fail_query(error_message=str(e))
+
+            # Fail trace for team coordinator sessions
+            if session.trace_id:
+                from application.team_task.trace_file_manager import TraceFileManager
+                await TraceFileManager.fail_trace(
+                    project_dir=session.project_dir,
+                    trace_id=session.trace_id,
+                )
+
             await self._fail_run_step(run_step, {"error": str(e)[:500]})
             await self._record_audit_event(
                 command.session_id,
@@ -1539,6 +1640,9 @@ class SessionApplicationService:
     def get_agent_state(self, session_id: str) -> str:
         return self._claude_agent_gateway.get_state(session_id)
 
+    def is_waiting_for_user_input(self, session_id: str) -> bool:
+        return self._claude_agent_gateway.is_waiting_for_user_input(session_id)
+
     async def ensure_session_idle(self, session_id: str) -> None:
         """Correct stale 'running' status when the agent is no longer connected.
 
@@ -1878,6 +1982,11 @@ class SessionApplicationService:
                 "用户响应权限请求",
                 {"response_keys": sorted(response_data.keys())},
             )
+            await self._connection_manager.broadcast_global({
+                "event": "session_input_resolved",
+                "session_id": session_id,
+                "agent_state": self._claude_agent_gateway.get_state(session_id),
+            })
         return resolved
 
     async def commit(self) -> None:

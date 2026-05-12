@@ -14,6 +14,10 @@ class ClaudeAgentGateway(ABC):
         prompt: str,
         cwd: str = "",
         sdk_session_id: str | None = None,
+        system_prompt: str | None = None,
+        mcp_servers: dict | None = None,
+        max_turns: int | None = None,
+        max_budget_usd: float | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Connect to Claude and send initial query, returning a persistent message stream.
 
@@ -138,6 +142,12 @@ class ClaudeAgentGateway(ABC):
             session_id: Session identifier.
         """
         return "bypassPermissions"
+
+    def get_state(self, session_id: str) -> str:
+        return "idle"
+
+    def is_waiting_for_user_input(self, session_id: str) -> bool:
+        return False
 
     def get_connected_model(self, session_id: str) -> str | None:
         """Return the model used for the current connection, or None if not connected.

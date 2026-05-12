@@ -80,6 +80,10 @@ class ClaudeAgentGateway(ClaudeAgentGatewayPort):
     def get_state(self, session_id: str) -> str:
         return self._session_states.get(session_id, "idle")
 
+    def is_waiting_for_user_input(self, session_id: str) -> bool:
+        fut = self._pending_user_responses.get(session_id)
+        return self.get_state(session_id) == "waiting_permission" or bool(fut and not fut.done())
+
     def set_broadcast_fn(self, fn: Any) -> None:
         """Set the broadcast function for pushing events to WebSocket clients."""
         self._broadcast_fn = fn
@@ -141,6 +145,13 @@ class ClaudeAgentGateway(ClaudeAgentGatewayPort):
         cwd: str,
         prev_sdk_sid: str | None,
         fork_session: bool = False,
+        system_prompt: str | None = None,
+        mcp_servers: dict | None = None,
+        max_turns: int | None = None,
+        max_budget_usd: float | None = None,
+        output_format: dict | None = None,
+        hooks: dict | None = None,
+        enable_file_checkpointing: bool = False,
     ) -> tuple[ClaudeSDKClient, bool]:
         """Build options, connect CLI; if normal resume fails, fallback to fresh session.
 
@@ -159,6 +170,13 @@ class ClaudeAgentGateway(ClaudeAgentGatewayPort):
             fork_session=fork_session,
             can_use_tool=self._create_can_use_tool_callback(session_id),
             stderr=stderr_cb,
+            system_prompt=system_prompt,
+            mcp_servers=mcp_servers or {},
+            max_turns=max_turns,
+            max_budget_usd=max_budget_usd,
+            output_format=output_format,
+            hooks=hooks,
+            enable_file_checkpointing=enable_file_checkpointing,
         )
 
         client = ClaudeSDKClient(options=options)
@@ -182,6 +200,13 @@ class ClaudeAgentGateway(ClaudeAgentGatewayPort):
                 cwd=cwd if cwd else None,
                 can_use_tool=self._create_can_use_tool_callback(session_id),
                 stderr=stderr_cb,
+                system_prompt=system_prompt,
+                mcp_servers=mcp_servers or {},
+                max_turns=max_turns,
+                max_budget_usd=max_budget_usd,
+                output_format=output_format,
+                hooks=hooks,
+                enable_file_checkpointing=enable_file_checkpointing,
             )
             client_fresh = ClaudeSDKClient(options=options_fresh)
             await client_fresh.connect()
@@ -272,6 +297,13 @@ class ClaudeAgentGateway(ClaudeAgentGatewayPort):
         prompt: str,
         cwd: str = "",
         sdk_session_id: str | None = None,
+        system_prompt: str | None = None,
+        mcp_servers: dict | None = None,
+        max_turns: int | None = None,
+        max_budget_usd: float | None = None,
+        output_format: dict | None = None,
+        hooks: dict | None = None,
+        enable_file_checkpointing: bool = False,
     ) -> AsyncIterator[dict[str, Any]]:
 
         # sdk_session_id semantics: None = allow cache fallback, "" = force fresh.
@@ -292,6 +324,13 @@ class ClaudeAgentGateway(ClaudeAgentGatewayPort):
             cwd=cwd,
             prev_sdk_sid=prev_sdk_sid,
             fork_session=bool(fork_source_sid),
+            system_prompt=system_prompt,
+            mcp_servers=mcp_servers,
+            max_turns=max_turns,
+            max_budget_usd=max_budget_usd,
+            output_format=output_format,
+            hooks=hooks,
+            enable_file_checkpointing=enable_file_checkpointing,
         )
         self._clients[session_id] = client
         self._connected_models[session_id] = model

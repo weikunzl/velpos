@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import io
+import mimetypes
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from application.project.command.create_project_command import CreateProjectCommand
 from application.project.command.init_plugin_command import InitPluginCommand
 from application.project.command.reorder_projects_command import ReorderProjectsCommand
+from application.team_task.command.create_team_project_command import CreateTeamProjectCommand
 from application.project.project_application_service import ProjectApplicationService
 from ohs.assembler.session_assembler import SessionAssembler
 from ohs.dependencies import get_project_application_service
@@ -16,6 +18,7 @@ from ohs.http.api_response import ApiResponse
 from ohs.http.dto.project_dto import (
     CompletePluginInitRequest,
     CreateProjectRequest,
+    CreateTeamProjectRequest,
     EnsureProjectsRequest,
     EnsureProjectsResponse,
     GitBranchesResponse,
@@ -28,6 +31,7 @@ from ohs.http.dto.project_dto import (
     ProjectResponse,
     ReorderProjectsRequest,
     ResetPluginRequest,
+    UpdateTeamConfigRequest,
     WorkspaceFileContentResponse,
     WorkspaceFileDiffResponse,
     WorkspaceExportRequest,
@@ -53,6 +57,39 @@ async def create_project(
 ) -> ApiResponse[ProjectResponse]:
     command = CreateProjectCommand(name=request.name, github_url=request.github_url)
     project = await service.create_project(command)
+    return ApiResponse.success(ProjectResponse.from_domain(project))
+
+
+@router.post("/teams", summary="Create team project")
+async def create_team_project(
+    request: CreateTeamProjectRequest,
+    service: ServiceDep,
+) -> ApiResponse[ProjectResponse]:
+    command = CreateTeamProjectCommand(
+        name=request.name,
+        dir_path=request.dir_path,
+        team_config=request.team_config,
+    )
+    project = await service.create_team_project(command)
+    return ApiResponse.success(ProjectResponse.from_domain(project))
+
+
+@router.get("/{project_id}/team-overview", summary="Get team project overview")
+async def get_team_overview(
+    project_id: str,
+    service: ServiceDep,
+) -> ApiResponse[dict]:
+    overview = await service.get_team_overview(project_id)
+    return ApiResponse.success(overview)
+
+
+@router.patch("/{project_id}/team-config", summary="Update team project config")
+async def update_team_config(
+    project_id: str,
+    request: UpdateTeamConfigRequest,
+    service: ServiceDep,
+) -> ApiResponse[ProjectResponse]:
+    project = await service.update_team_config(project_id, request.team_config)
     return ApiResponse.success(ProjectResponse.from_domain(project))
 
 
@@ -170,6 +207,21 @@ async def read_workspace_file(
 ) -> ApiResponse[WorkspaceFileContentResponse]:
     data = await service.read_workspace_file(project_id, path)
     return ApiResponse.success(WorkspaceFileContentResponse(**data))
+
+
+@router.get("/{project_id}/workspace/file-raw", summary="Serve raw workspace file")
+async def read_workspace_file_raw(
+    project_id: str,
+    service: ServiceDep,
+    path: str = Query(..., min_length=1, max_length=1000),
+):
+    file_path = await service.read_workspace_file_raw(project_id, path)
+    media_type, _ = mimetypes.guess_type(str(file_path))
+    return FileResponse(
+        path=file_path,
+        media_type=media_type or "application/octet-stream",
+        filename=file_path.name,
+    )
 
 
 @router.get("/{project_id}/workspace/diff", summary="Get project workspace file diff")

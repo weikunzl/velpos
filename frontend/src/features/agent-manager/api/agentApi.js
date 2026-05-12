@@ -11,3 +11,7 @@ export function loadAgent(projectId, agentId, language = 'en', sessionId = '') {
 export function unloadAgent(projectId, sessionId = '') {
   return post(`/agents/projects/${projectId}/unload`, { session_id: sessionId })
 }
+
+export function updateAgent(projectId) {
+  return post(`/agents/projects/${projectId}/update`)
+}

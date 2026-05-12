@@ -4,6 +4,7 @@ import { useProject } from '@entities/project'
 import { PINNED_PROJECTS_KEY, PINNED_SESSIONS_KEY, compareSessions, loadPinnedIds, savePinnedIds, splitPinnedProjects, togglePinnedId } from '@shared/lib/pinning'
 import SessionListItem from './SessionListItem.vue'
 import CreateSessionDialog from './CreateSessionDialog.vue'
+import CreateTeamDialog from '@features/agent-teams/ui/CreateTeamDialog.vue'
 
 const COLLAPSED_KEY = 'pf_collapsed_groups'
 
@@ -38,9 +39,10 @@ const emit = defineEmits([
   'reorder-projects',
 ])
 
-const { projects } = useProject()
+const { projects, sidebarMode, setSidebarMode, addProject } = useProject()
 
 const showCreateDialog = ref(false)
+const showCreateTeamDialog = ref(false)
 
 // Pinned management
 const pinnedProjectIds = ref(loadPinnedIds(PINNED_PROJECTS_KEY))
@@ -60,6 +62,15 @@ function persistPinnedSessions() {
   } catch (e) {
     console.warn('Failed to save pinned sessions:', e)
   }
+}
+
+function projectHasAgent(project) {
+  return Boolean(project?.agents?.current)
+}
+
+function projectDisplayName(project) {
+  if (project?.project_type === 'team' || !projectHasAgent(project)) return project?.name || ''
+  return `${project.name} (agent)`
 }
 
 function scheduleCount(projectId) {
@@ -230,22 +241,33 @@ const projectGroups = computed(() => {
     list.sort((a, b) => compareSessions(a, b, pinnedSessionIds.value))
   }
 
+  // Filter projects by sidebar mode
+  const modeFiltered = projects.value.filter(p =>
+    sidebarMode.value === 'teams'
+      ? p.project_type === 'team'
+      : p.project_type !== 'team'
+  )
+
   // Build ordered project groups (projects are already sorted by sort_order from backend)
   // Separate pinned and unpinned projects
   const pinnedGroups = []
   const unpinnedGroups = []
 
-  const { pinnedProjects, unpinnedProjects } = splitPinnedProjects(projects.value, pinnedProjectIds.value)
+  const { pinnedProjects, unpinnedProjects } = splitPinnedProjects(modeFiltered, pinnedProjectIds.value)
 
   for (const project of [...pinnedProjects, ...unpinnedProjects]) {
     const projectSessions = sessionsByProject[project.id] || []
-    if (projectSessions.length === 0) continue
+    if (projectSessions.length === 0 && project.project_type !== 'team') continue
 
     const group = {
       id: project.id,
       name: project.name,
+      displayName: projectDisplayName(project),
       sessions: projectSessions,
       pinned: isProjectPinned(project.id),
+      project_type: project.project_type,
+      agents: project.agents,
+      team_config: project.team_config,
     }
 
     if (group.pinned) {
@@ -263,14 +285,17 @@ const projectGroups = computed(() => {
     groups[pinnedGroups.length - 1].isLastPinned = true
   }
 
-  // Unassigned sessions (no project_id, including claude-code imports)
-  const unassigned = sessionsByProject['__unassigned__']
-  if (unassigned && unassigned.length > 0) {
-    groups.push({
-      id: '__unassigned__',
-      name: 'Unassigned',
-      sessions: unassigned,
-    })
+  // Unassigned sessions (no project_id, including claude-code imports) — only in single mode
+  if (sidebarMode.value !== 'teams') {
+    const unassigned = sessionsByProject['__unassigned__']
+    if (unassigned && unassigned.length > 0) {
+      groups.push({
+        id: '__unassigned__',
+        name: 'Unassigned',
+        displayName: 'Unassigned',
+        sessions: unassigned,
+      })
+    }
   }
 
   return groups
@@ -334,6 +359,23 @@ function handleCreateCancel() {
   showCreateDialog.value = false
 }
 
+function handleTeamCreated(project) {
+  showCreateTeamDialog.value = false
+  addProject(project)
+}
+
+function handleTeamCreateCancel() {
+  showCreateTeamDialog.value = false
+}
+
+function handleNewClick() {
+  if (sidebarMode.value === 'teams') {
+    showCreateTeamDialog.value = true
+  } else {
+    showCreateDialog.value = true
+  }
+}
+
 function scrollToSession(sessionId) {
   if (!sessionId) return
   // Find which group the session belongs to
@@ -382,14 +424,14 @@ defineExpose({ scrollToSession })
     <div class="sidebar-header">
       <button
         class="new-session-btn"
-        @click="showCreateDialog = true"
-        aria-label="Create new project"
+        @click="handleNewClick"
+        :aria-label="sidebarMode === 'teams' ? 'Create new team' : 'Create new project'"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="12" y1="5" x2="12" y2="19"/>
           <line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
-        New Project
+        {{ sidebarMode === 'teams' ? 'New Team' : 'New Project' }}
       </button>
       <button
         class="select-mode-btn"
@@ -403,6 +445,19 @@ defineExpose({ scrollToSession })
           <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
         </svg>
       </button>
+    </div>
+
+    <div class="sidebar-mode-tabs">
+      <button
+        class="mode-tab"
+        :class="{ active: sidebarMode === 'single' }"
+        @click="setSidebarMode('single')"
+      >Agents</button>
+      <button
+        class="mode-tab"
+        :class="{ active: sidebarMode === 'teams' }"
+        @click="setSidebarMode('teams')"
+      >Teams</button>
     </div>
 
     <div class="sidebar-list-wrapper">
@@ -438,7 +493,7 @@ defineExpose({ scrollToSession })
           @drop="onDrop($event, group.id)"
           @dragend="onDragEnd"
         >
-          <div class="project-header" :title="group.name" @click="toggleGroup(group.id)">
+          <div class="project-header" :title="group.displayName || group.name" @click="toggleGroup(group.id)">
               <svg
                 class="collapse-arrow"
                 :class="{ collapsed: isGroupCollapsed(group.id) }"
@@ -448,13 +503,19 @@ defineExpose({ scrollToSession })
               >
                 <polyline points="6 9 12 15 18 9"/>
               </svg>
-              <svg v-if="group.pinned" class="project-icon project-icon--pinned" width="12" height="12" viewBox="0 0 24 24" fill="var(--accent)" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <svg v-if="group.project_type === 'team'" class="project-icon project-icon--team" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+              <svg v-else-if="group.pinned" class="project-icon project-icon--pinned" width="12" height="12" viewBox="0 0 24 24" fill="var(--accent)" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
               </svg>
               <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
               </svg>
-              <span class="project-name">{{ group.name }}</span>
+              <span class="project-name">{{ group.displayName || group.name }}</span>
               <span class="project-count">{{ group.sessions.length }}</span>
               <Transition name="confirm-swap" mode="out-in">
               <span v-if="deletingProject === group.id" key="confirm" class="project-delete-confirm" @click.stop>
@@ -533,6 +594,14 @@ defineExpose({ scrollToSession })
               </span>
               </Transition>
           </div>
+          <!-- Team members preview -->
+          <div v-if="group.project_type === 'team' && group.team_config" class="team-members-preview" :class="{ collapsed: isGroupCollapsed(group.id) }">
+            <span
+              v-for="(item, idx) in (group.team_config.pipeline || group.team_config.members || [])"
+              :key="idx"
+              class="team-member-tag"
+            >{{ item.role_label || item.role }}</span>
+          </div>
           <div
               class="group-content"
               :class="{ collapsed: isGroupCollapsed(group.id) }"
@@ -563,12 +632,18 @@ defineExpose({ scrollToSession })
       <!-- Empty state -->
       <div v-else class="empty-state">
         <div class="empty-icon">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <svg v-if="sidebarMode === 'teams'" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+          <svg v-else width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
         </div>
-        <p class="empty-text">No projects yet</p>
-        <p class="empty-hint">Create a new project to get started</p>
+        <p class="empty-text">{{ sidebarMode === 'teams' ? 'No teams yet' : 'No projects yet' }}</p>
+        <p class="empty-hint">{{ sidebarMode === 'teams' ? 'Create a team to coordinate multiple agents' : 'Create a new project to get started' }}</p>
       </div>
     </div>
       <div class="sidebar-list-fade sidebar-list-fade--bottom"></div>
@@ -578,6 +653,12 @@ defineExpose({ scrollToSession })
       :visible="showCreateDialog"
       @confirm="handleCreateConfirm"
       @cancel="handleCreateCancel"
+    />
+
+    <CreateTeamDialog
+      :visible="showCreateTeamDialog"
+      @created="handleTeamCreated"
+      @cancel="handleTeamCreateCancel"
     />
 
     <!-- Batch delete bar -->
@@ -616,14 +697,47 @@ defineExpose({ scrollToSession })
   top: 0;
   z-index: 2;
   padding: 12px;
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: none;
   background: var(--glass-bg);
   display: flex;
   gap: 8px;
   align-items: center;
-  box-shadow: inset 0 1px 0 var(--glass-highlight), var(--shadow-xs);
+  box-shadow: inset 0 1px 0 var(--glass-highlight);
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+.sidebar-mode-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 12px 8px;
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow: var(--shadow-xs);
+}
+
+.mode-tab {
+  flex: 1;
+  padding: 5px 0;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.mode-tab:hover {
+  color: var(--text-secondary);
+}
+
+.mode-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 
 .new-session-btn {
@@ -854,6 +968,34 @@ defineExpose({ scrollToSession })
   height: 0;
   margin: 6px 0;
   border: none;
+}
+
+/* Team members preview */
+.team-members-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 16px 6px 32px;
+  overflow: hidden;
+  max-height: 60px;
+  transition: max-height 250ms cubic-bezier(0.4, 0, 0.2, 1), opacity 200ms;
+}
+
+.team-members-preview.collapsed {
+  max-height: 0;
+  opacity: 0;
+}
+
+.team-member-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  white-space: nowrap;
 }
 
 /* Project delete confirm */

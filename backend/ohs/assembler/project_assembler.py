@@ -15,6 +15,8 @@ class ProjectAssembler:
             "agents": project.agents,
             "plugins": project.plugins,
             "sort_order": project.sort_order,
+            "project_type": project.project_type,
+            "team_config": project.team_config,
             "created_at": project.created_at.isoformat() if project.created_at else None,
             "updated_at": project.updated_at.isoformat() if project.updated_at else None,
         }

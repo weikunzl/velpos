@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { listAgents, loadAgent, unloadAgent } from '../api/agentApi'
+import { listAgents, loadAgent, unloadAgent, updateAgent } from '../api/agentApi'
 
 // Module-level singleton state
 const categories = ref([])
@@ -50,6 +50,20 @@ export function useAgentManager() {
     }
   }
 
+  async function handleUpdate(projectId) {
+    operating.value = true
+    error.value = null
+    try {
+      const project = await updateAgent(projectId)
+      return project
+    } catch (e) {
+      error.value = e.message
+      return null
+    } finally {
+      operating.value = false
+    }
+  }
+
   function setLanguage(lang) {
     language.value = lang
     localStorage.setItem('pf_agent_lang', lang)
@@ -65,6 +79,7 @@ export function useAgentManager() {
     fetchAgents,
     handleLoad,
     handleUnload,
+    handleUpdate,
     setLanguage,
   }
 }

@@ -4,6 +4,10 @@ import { downloadWorkspaceSelection } from '@entities/project/api/projectApi'
 import hljs from 'highlight.js/lib/common'
 import { useGlobalHotkeys } from '../../../shared/lib/useGlobalHotkeys'
 import { useWorkspace } from '../model/useWorkspace'
+import { getFilePreviewType, getFileRawUrl } from '../lib/fileTypes'
+import ImagePreview from './ImagePreview.vue'
+import PdfPreview from './PdfPreview.vue'
+import ExcelPreview from './ExcelPreview.vue'
 
 const props = defineProps({
   visible: { type: Boolean, required: true },
@@ -55,6 +59,11 @@ let historyAnchorFrame = null
 const projectId = computed(() => props.project?.id || '')
 const fileLines = computed(() => (selectedFile.value?.content || '').split('\n'))
 const canApplyVb = computed(() => selectedFile.value && reviews.value.length > 0 && !props.vbRunning)
+const binaryPreviewType = computed(() => selectedFile.value ? getFilePreviewType(selectedFile.value.path) : null)
+const binaryPreviewUrl = computed(() => {
+  if (!selectedFile.value || !projectId.value) return ''
+  return getFileRawUrl(projectId.value, selectedFile.value.path)
+})
 const drawerWidth = computed(() => {
   if (!props.visible) return 0
   if (contentFullscreen.value) return 0
@@ -818,7 +827,12 @@ function nextDifference() {
         </header>
 
         <div v-if="reading" class="workspace-empty viewer-empty">Reading file...</div>
-        <div v-else-if="selectedFile.is_binary" class="workspace-empty viewer-empty">Binary file cannot be previewed.</div>
+        <template v-else-if="selectedFile.is_binary">
+          <ImagePreview v-if="binaryPreviewType === 'image'" :src="binaryPreviewUrl" :path="selectedFile.path" />
+          <PdfPreview v-else-if="binaryPreviewType === 'pdf'" :src="binaryPreviewUrl" />
+          <ExcelPreview v-else-if="binaryPreviewType === 'excel'" :src="binaryPreviewUrl" />
+          <div v-else class="workspace-empty viewer-empty">Binary file cannot be previewed.</div>
+        </template>
         <template v-else>
           <div v-if="compareMode" class="compare-shell">
             <div class="compare-toolbar">

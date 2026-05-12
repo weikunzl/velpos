@@ -36,6 +36,7 @@ from ohs.http.settings_router import router as settings_router
 from ohs.http.terminal_router import router as terminal_router
 from ohs.http.usage_router import router as usage_router
 from ohs.http.memory_router import router as memory_router
+from ohs.http.team_router import router as team_router
 from ohs.ws.session_ws import router as ws_router
 
 class _LogContextDefaults(logging.Filter):
@@ -374,6 +375,7 @@ app.include_router(channel_profile_router)
 app.include_router(terminal_router)
 app.include_router(usage_router)
 app.include_router(memory_router)
+app.include_router(team_router)
 
 
 @app.exception_handler(BusinessException)

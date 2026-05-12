@@ -27,6 +27,8 @@ class Session:
     _pending_request_context: dict[str, Any] | None = None
     _queued_command: dict[str, Any] | None = None
     _cancel_requested: bool = False
+    _team_task_id: str = ""
+    _trace_id: str = ""
     _updated_time: datetime | None = None
 
     @property
@@ -93,6 +95,14 @@ class Session:
         return self._cancel_requested
 
     @property
+    def team_task_id(self) -> str:
+        return self._team_task_id
+
+    @property
+    def trace_id(self) -> str:
+        return self._trace_id
+
+    @property
     def updated_time(self) -> datetime | None:
         return self._updated_time
 
@@ -114,6 +124,8 @@ class Session:
         model: str = "",
         project_id: str = "",
         project_dir: str = "",
+        team_task_id: str = "",
+        trace_id: str = "",
     ) -> Session:
         """Create a new Session.
 
@@ -141,6 +153,8 @@ class Session:
             _pending_request_context=None,
             _queued_command=None,
             _cancel_requested=False,
+            _team_task_id=team_task_id,
+            _trace_id=trace_id,
             _updated_time=datetime.now(),
         )
 
@@ -161,6 +175,8 @@ class Session:
         pending_request_context: dict[str, Any] | None = None,
         queued_command: dict[str, Any] | None = None,
         cancel_requested: bool = False,
+        team_task_id: str = "",
+        trace_id: str = "",
         updated_time: datetime | None = None,
     ) -> Session:
         """Reconstitute a Session from persisted data.
@@ -188,6 +204,8 @@ class Session:
                 "attachments": list(queued_command.get("attachments", [])),
             } if queued_command else None,
             _cancel_requested=cancel_requested,
+            _team_task_id=team_task_id,
+            _trace_id=trace_id,
             _updated_time=updated_time,
         )
 
@@ -336,6 +354,10 @@ class Session:
         self._cancel_requested = False
         self._updated_time = datetime.now()
 
+    def update_trace_id(self, trace_id: str) -> None:
+        self._trace_id = trace_id
+        self._updated_time = datetime.now()
+
     def clear_context(self) -> None:
         """清空会话上下文，完全重置到初始状态。
 
@@ -365,6 +387,7 @@ class Session:
         self._pending_request_context = None
         self._queued_command = None
         self._cancel_requested = False
+        self._trace_id = ""
         self._status = SessionStatus.IDLE
         self._updated_time = datetime.now()
 

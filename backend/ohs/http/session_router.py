@@ -10,10 +10,12 @@ from application.session.command.import_claude_session_command import ImportClau
 from application.session.session_application_service import SessionApplicationService
 from application.session.session_branch_application_service import SessionBranchApplicationService
 from application.im_binding.im_channel_application_service import ImChannelApplicationService
+from application.team_task.team_coordinator_service import TeamCoordinatorService
 from ohs.dependencies import (
     get_im_channel_application_service,
     get_session_application_service,
     get_session_branch_application_service,
+    get_team_coordinator_service,
 )
 from ohs.http.api_response import ApiResponse
 from ohs.http.dto.session_dto import (
@@ -47,6 +49,10 @@ BranchServiceDep = Annotated[
 ImServiceDep = Annotated[
     ImChannelApplicationService,
     Depends(get_im_channel_application_service),
+]
+TeamServiceDep = Annotated[
+    TeamCoordinatorService,
+    Depends(get_team_coordinator_service),
 ]
 
 
@@ -221,7 +227,16 @@ async def list_session_audit_events(
 async def delete_session(
     session_id: str,
     service: ServiceDep,
+    team_service: TeamServiceDep,
+    cascade: bool = Query(default=False),
 ) -> ApiResponse[None]:
+    if cascade:
+        worker_ids = await team_service.delete_team_session(session_id)
+        for wid in worker_ids:
+            try:
+                await service.delete_session(wid)
+            except Exception:
+                pass
     await service.delete_session(session_id)
     return ApiResponse.success()
 

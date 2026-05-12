@@ -99,6 +99,8 @@ class SessionRepositoryImpl(SessionRepository):
             pending_request_context_json=SessionRepositoryImpl._serialize_json_field(session.pending_request_context),
             queued_command_json=SessionRepositoryImpl._serialize_json_field(session.queued_command),
             cancel_requested=1 if session.cancel_requested else 0,
+            team_task_id=session.team_task_id,
+            trace_id=session.trace_id,
         )
 
     @staticmethod
@@ -123,6 +125,8 @@ class SessionRepositoryImpl(SessionRepository):
             pending_request_context=SessionRepositoryImpl._deserialize_json_field(model.pending_request_context_json),
             queued_command=SessionRepositoryImpl._deserialize_json_field(model.queued_command_json),
             cancel_requested=model.cancel_requested == 1,
+            team_task_id=model.team_task_id if model.team_task_id else "",
+            trace_id=model.trace_id if model.trace_id else "",
             updated_time=model.updated_time,
         )
 

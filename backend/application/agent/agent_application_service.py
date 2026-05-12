@@ -10,6 +10,7 @@ from infr.agent.catalog import (
     AGENT_CATALOG,
     CATEGORIES,
     get_agent_by_id,
+    list_team_templates,
     read_prompt,
 )
 
@@ -51,6 +52,9 @@ class AgentApplicationService:
             })
         return {"categories": categories}
 
+    async def list_team_templates(self, language: str = "en", mode: str | None = None) -> dict[str, Any]:
+        return {"templates": list_team_templates(language, mode)}
+
     async def load_agent(
         self,
         project_id: str,
@@ -65,6 +69,11 @@ class AgentApplicationService:
         project = await project_repository.find_by_id(project_id)
         if not project:
             raise ValueError(f"Project not found: {project_id}")
+
+        if project.is_agent_locked():
+            raise BusinessException(
+                f"Project agent is locked by a running team task, cannot switch agent"
+            )
 
         project_dir = project.dir_path
 
@@ -87,6 +96,42 @@ class AgentApplicationService:
         await project_repository.save(project)
         return project
 
+    async def update_agent(
+        self,
+        project_id: str,
+        project_repository: Any,
+    ) -> Any:
+        """Re-apply current agent's CLAUDE.md prompt and reinstall plugins."""
+        project = await project_repository.find_by_id(project_id)
+        if not project:
+            raise ValueError(f"Project not found: {project_id}")
+
+        current_agent = project.get_current_agent()
+        if not current_agent:
+            raise BusinessException("No agent is currently loaded")
+
+        agent_id = current_agent["id"]
+        language = current_agent.get("language", "en")
+        agent_meta = get_agent_by_id(agent_id)
+        if not agent_meta:
+            raise ValueError(f"Unknown agent: {agent_id}")
+
+        project_dir = project.dir_path
+
+        # Re-apply CLAUDE.md revision
+        prompt_content = read_prompt(agent_id, agent_meta["category"], language)
+        await self._apply_claude_md_revision(project_dir, prompt_content)
+        logger.info(
+            "Updated agent prompt through CLAUDE.md revision: agent=%s, lang=%s, project=%s",
+            agent_id, language, project_dir,
+        )
+
+        # Reinstall plugins (uninstall then install to get latest versions)
+        await self._uninstall_agent_plugins(agent_id, project_dir)
+        await self._install_agent_plugins(agent_id, project_dir)
+
+        return project
+
     async def unload_agent(
         self,
         project_id: str,
@@ -95,6 +140,11 @@ class AgentApplicationService:
         project = await project_repository.find_by_id(project_id)
         if not project:
             raise ValueError(f"Project not found: {project_id}")
+
+        if project.is_agent_locked():
+            raise BusinessException(
+                f"Project agent is locked by a running team task, cannot unload agent"
+            )
 
         # Uninstall current agent's plugins
         current_agent = project.get_current_agent()

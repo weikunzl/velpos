@@ -5,6 +5,7 @@ import { useProject } from '@entities/project'
 import { useImBinding } from '@features/im-binding'
 import { createWsConnection, createGlobalEventConnection } from '@shared/api/wsClient'
 import { listSchedules } from '@features/scheduler/api/schedulerApi'
+import { useTeamRuntime } from '@features/agent-teams/model/useTeamRuntime'
 import { ChatPanelPage } from '@pages/chat-panel'
 import { SessionSidebar, useSessionList } from '@features/session-list'
 import { NotificationBell, useNotifications } from '@features/notification-center'
@@ -77,6 +78,7 @@ const schedulerProjectId = ref('')
 const scheduleCounts = ref({})
 let globalEventConnection = null
 const sidebarRef = ref(null)
+const { handleTeamEvent, handleWorkerSessionEvent } = useTeamRuntime()
 const currentProject = computed(() => {
   const projectId = session.value?.project_id
   if (!projectId) return null
@@ -181,6 +183,25 @@ async function handleGlobalEvent(data) {
         type: 'info',
       })
     }
+  }
+  // Forward team task events to the runtime composable
+  if (data?.event?.startsWith('team_task_')) {
+    handleTeamEvent(data)
+  }
+  if (data?.event === 'session_waiting_for_input' || data?.event === 'session_input_resolved') {
+    handleWorkerSessionEvent(data)
+  }
+  if (data?.event === 'session_waiting_for_input' && !_connections.has(data.session_id)) {
+    const sess = sessions.value.find(s => s.session_id === data.session_id)
+    const proj = sess?.project_id
+      ? projects.value.find(p => p.id === sess.project_id)
+      : null
+    addNotification({
+      sessionId: data.session_id,
+      sessionName: sess?.name || data.session_id,
+      projectName: proj?.name || '',
+      type: 'auth_required',
+    })
   }
 }
 

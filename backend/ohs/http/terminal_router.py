@@ -37,5 +37,13 @@ async def open_path(
     request: OpenPathRequest,
     service: ServiceDep,
 ) -> ApiResponse[dict]:
-    result = await service.open_path(request.path)
+    result = await service.open_path(request.path, app=request.app)
+    return ApiResponse.success(result)
+
+
+@router.get("/applications", summary="List installed applications for opening files")
+async def list_applications(
+    service: ServiceDep,
+) -> ApiResponse[list]:
+    result = await service.list_applications()
     return ApiResponse.success(result)

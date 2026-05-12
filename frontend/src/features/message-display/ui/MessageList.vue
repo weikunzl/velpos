@@ -7,11 +7,18 @@ const props = defineProps({
     type: Array,
     required: true,
   },
+  hasMore: {
+    type: Boolean,
+    default: false,
+  },
 })
+
+const emit = defineEmits(['load-more'])
 
 const messagesContainer = ref(null)
 const isNearBottom = ref(true)
 const showScrollBtn = ref(false)
+const loadingMore = ref(false)
 
 const BOTTOM_THRESHOLD = 150
 
@@ -33,6 +40,36 @@ function scrollToBottom() {
 
 function handleScroll() {
   checkNearBottom()
+}
+
+// Sentinel IntersectionObserver for loading more
+let sentinelObserver = null
+const sentinelEl = ref(null)
+
+function setupSentinel() {
+  if (!messagesContainer.value || !sentinelEl.value) return
+  sentinelObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries[0].isIntersecting && props.hasMore && !loadingMore.value) {
+        triggerLoadMore()
+      }
+    },
+    { root: messagesContainer.value, threshold: 0 }
+  )
+  sentinelObserver.observe(sentinelEl.value)
+}
+
+async function triggerLoadMore() {
+  const el = messagesContainer.value
+  if (!el) return
+  loadingMore.value = true
+  const prevScrollHeight = el.scrollHeight
+  emit('load-more')
+  await nextTick()
+  await new Promise(resolve => requestAnimationFrame(resolve))
+  const newScrollHeight = el.scrollHeight
+  el.scrollTop += newScrollHeight - prevScrollHeight
+  loadingMore.value = false
 }
 
 // Auto-scroll when new messages arrive and user is near bottom
@@ -59,6 +96,8 @@ onMounted(() => {
     }
   })
   observer.observe(el, { childList: true, subtree: true, characterData: true })
+
+  setupSentinel()
 })
 
 onBeforeUnmount(() => {
@@ -70,6 +109,10 @@ onBeforeUnmount(() => {
     cancelAnimationFrame(scrollRafId)
     scrollRafId = null
   }
+  if (sentinelObserver) {
+    sentinelObserver.disconnect()
+    sentinelObserver = null
+  }
 })
 </script>
 
@@ -77,6 +120,9 @@ onBeforeUnmount(() => {
   <div class="messages-shell">
     <div ref="messagesContainer" class="messages-area" @scroll="handleScroll">
       <div class="messages-content">
+        <div ref="sentinelEl" class="load-more-sentinel">
+          <div v-if="loadingMore" class="load-more-indicator">Loading...</div>
+        </div>
         <div v-if="messages.length === 0" class="empty-state">
           <div class="empty-icon">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -116,6 +162,18 @@ onBeforeUnmount(() => {
   min-height: 0;
   position: relative;
   display: flex;
+}
+
+.load-more-sentinel {
+  height: 1px;
+  width: 100%;
+}
+
+.load-more-indicator {
+  text-align: center;
+  padding: 12px 0;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .messages-area {

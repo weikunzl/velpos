@@ -27,6 +27,7 @@ class PluginInfo(BaseModel):
     scope: str
     enabled: bool
     installed: bool
+    updated_at: str = ""
 
 
 class PluginListResponse(BaseModel):

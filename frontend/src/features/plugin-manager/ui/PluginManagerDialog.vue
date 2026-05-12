@@ -2,6 +2,20 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { usePluginManager } from '../model/usePluginManager'
 
+function formatRelativeTime(isoStr) {
+  if (!isoStr) return ''
+  const d = new Date(isoStr)
+  const now = new Date()
+  const diffMin = Math.floor((now - d) / 60000)
+  if (diffMin < 1) return 'just now'
+  if (diffMin < 60) return `${diffMin}m ago`
+  const diffHr = Math.floor(diffMin / 60)
+  if (diffHr < 24) return `${diffHr}h ago`
+  const diffDay = Math.floor(diffHr / 24)
+  if (diffDay < 7) return `${diffDay}d ago`
+  return d.toLocaleDateString()
+}
+
 const props = defineProps({
   visible: {
     type: Boolean,
@@ -146,6 +160,9 @@ onBeforeUnmount(() => {
               </div>
               <div v-if="plugin.description" class="plugin-desc">
                 {{ plugin.description }}
+              </div>
+              <div v-if="plugin.updated_at" class="plugin-time">
+                Updated {{ formatRelativeTime(plugin.updated_at) }}
               </div>
             </div>
             <div class="plugin-actions">
@@ -368,6 +385,13 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.plugin-time {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.7;
 }
 
 .plugin-actions {

@@ -118,6 +118,14 @@ function addMessageTo(sessionId, msg) {
 function setMessagesFor(sessionId, msgs, sessionData) {
   const state = _ensureState(sessionId)
   if (!state) return
+  // Skip replacement if messages haven't changed (cache hit on WS reconnect)
+  if (state.messages.length === msgs.length && state.messages.length > 0) {
+    const lastCached = state.messages[state.messages.length - 1]
+    const lastNew = msgs[msgs.length - 1]
+    if ((lastCached._id ?? lastCached.id) === (lastNew._id ?? lastNew.id)) {
+      return
+    }
+  }
   state._nextMsgId = msgs.length
   state.messages.length = 0
   state.messages.push(...msgs.map(m => _assignIdFor(state, m)))

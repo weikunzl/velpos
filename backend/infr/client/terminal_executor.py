@@ -166,11 +166,17 @@ class TerminalExecutor:
         except ProcessLookupError:
             pass
 
-    async def open_path(self, path: str) -> dict[str, Any]:
+    async def open_path(self, path: str, app: str | None = None) -> dict[str, Any]:
         if sys.platform == "darwin":
-            cmd = ["open", path]
+            cmd = ["open"]
+            if app:
+                cmd += ["-a", app]
+            cmd.append(path)
         elif sys.platform == "win32":
-            cmd = ["explorer", path]
+            if app:
+                cmd = ["cmd", "/c", "start", "", app, path]
+            else:
+                cmd = ["explorer", path]
         else:
             if os.path.exists(path):
                 return {"stdout": "", "stderr": "", "return_code": 0}
@@ -187,6 +193,95 @@ class TerminalExecutor:
             "stderr": stderr_bytes.decode("utf-8", errors="replace"),
             "return_code": process.returncode,
         }
+
+    _app_cache: list[dict[str, str]] | None = None
+
+    async def list_applications(self) -> list[dict[str, str]]:
+        if self._app_cache is not None:
+            return self._app_cache
+
+        well_known = [
+            ("Visual Studio Code", "com.microsoft.VSCode"),
+            ("Cursor", "com.todesktop.230313mzl4w4u92"),
+            ("WebStorm", "com.jetbrains.WebStorm"),
+            ("IntelliJ IDEA", "com.jetbrains.intellij"),
+            ("PyCharm", "com.jetbrains.pycharm"),
+            ("Sublime Text", "com.sublimetext.4"),
+            ("Xcode", "com.apple.dt.Xcode"),
+            ("iTerm", "com.googlecode.iterm2"),
+            ("Terminal", "com.apple.Terminal"),
+            ("Finder", "com.apple.finder"),
+        ]
+        installed: list[dict[str, str]] = []
+
+        if sys.platform == "darwin":
+            for name, bundle_id in well_known:
+                process = await asyncio.create_subprocess_exec(
+                    "mdfind", f"kMDItemCFBundleIdentifier == '{bundle_id}'",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout_bytes, _ = await process.communicate()
+                app_path = stdout_bytes.decode().strip().split("\n")[0] if stdout_bytes.strip() else ""
+                if app_path:
+                    icon = await self._extract_icon(app_path)
+                    installed.append({"name": name, "bundle_id": bundle_id, "icon": icon})
+        elif sys.platform == "win32":
+            for name, _ in well_known:
+                process = await asyncio.create_subprocess_exec(
+                    "where", name.lower().replace(" ", ""),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                await process.communicate()
+                if process.returncode == 0:
+                    installed.append({"name": name, "bundle_id": "", "icon": ""})
+
+        self._app_cache = installed
+        return installed
+
+    @staticmethod
+    async def _extract_icon(app_path: str) -> str:
+        import base64
+        import tempfile
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "/usr/libexec/PlistBuddy", "-c", "Print :CFBundleIconFile",
+                os.path.join(app_path, "Contents", "Info.plist"),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await proc.communicate()
+            icon_name = stdout.decode().strip()
+            if not icon_name:
+                return ""
+            if not icon_name.endswith(".icns"):
+                icon_name += ".icns"
+            icns_path = os.path.join(app_path, "Contents", "Resources", icon_name)
+            if not os.path.isfile(icns_path):
+                return ""
+
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                tmp_path = tmp.name
+
+            proc = await asyncio.create_subprocess_exec(
+                "sips", "-s", "format", "png", "-z", "32", "32",
+                icns_path, "--out", tmp_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await proc.communicate()
+
+            if proc.returncode == 0 and os.path.isfile(tmp_path):
+                with open(tmp_path, "rb") as f:
+                    data = base64.b64encode(f.read()).decode()
+                os.unlink(tmp_path)
+                return f"data:image/png;base64,{data}"
+            os.unlink(tmp_path)
+        except Exception:
+            pass
+        return ""
 
     def _shell_args(self, shell: str) -> list[str]:
         shell_name = os.path.basename(shell)

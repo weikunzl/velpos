@@ -33,6 +33,7 @@ from application.session.session_run_timeline_service import SessionRunTimelineS
 from application.session.session_timeline_event_service import SessionTimelineEventService
 from application.settings.settings_application_service import SettingsApplicationService
 from application.terminal.terminal_application_service import TerminalApplicationService
+from application.team_task.team_coordinator_service import TeamCoordinatorService
 from application.usage.usage_governance_application_service import UsageGovernanceApplicationService
 from infr.client.claude_agent_gateway import ClaudeAgentGateway
 from infr.client.claude_command_gateway import ClaudeCommandGateway
@@ -67,6 +68,7 @@ from infr.repository.session_repository_impl import SessionRepositoryImpl
 from infr.repository.session_run_step_repository_impl import SessionRunStepRepositoryImpl
 from infr.repository.session_timeline_event_repository_impl import SessionTimelineEventRepositoryImpl
 from infr.repository.session_snapshot_repository_impl import SessionSnapshotRepositoryImpl
+from infr.repository.team_task_repository_impl import TeamTaskRepositoryImpl
 from infr.repository.usage_governance_repository_impl import UsageGovernanceRepositoryImpl
 from infr.storage.attachment_storage_gateway import AttachmentStorageGateway
 from domain.im_binding.model.channel_registry import ImChannelRegistry
@@ -83,6 +85,16 @@ async def _broadcast_with_im(session_id: str, data: dict) -> None:
     await _connection_manager.broadcast(session_id, data)
     event = data.get("event")
     if event in {"permission_request", "user_choice_request"}:
+        interaction_type = "user_choice" if event == "user_choice_request" else "permission"
+        await _connection_manager.broadcast_global({
+            "event": "session_waiting_for_input",
+            "session_id": session_id,
+            "interaction_type": interaction_type,
+            "tool_name": data.get("tool_name", ""),
+            "questions": data.get("questions", []),
+            "tool_input": data.get("tool_input", ""),
+            "agent_state": "waiting_permission",
+        })
         audit_type = "ask_user_question_requested" if event == "user_choice_request" else "permission_requested"
         try:
             await _record_session_audit_event(
@@ -701,3 +713,25 @@ async def get_project_repository(
     db_session: AsyncSession = Depends(get_async_session),
 ) -> ProjectRepositoryImpl:
     return ProjectRepositoryImpl(db_session)
+
+
+async def get_team_coordinator_service(
+    db_session: AsyncSession = Depends(get_async_session),
+) -> TeamCoordinatorService:
+    revision_service = ClaudeMdRevisionApplicationService(
+        revision_repository=ClaudeMdRevisionRepositoryImpl(db_session),
+        project_repository=ProjectRepositoryImpl(db_session),
+    )
+    agent_service = AgentApplicationService(
+        plugin_manager=_claude_plugin_manager,
+        claude_md_revision_service=revision_service,
+    )
+    return TeamCoordinatorService(
+        project_repository=ProjectRepositoryImpl(db_session),
+        session_repository=SessionRepositoryImpl(db_session),
+        team_task_repository=TeamTaskRepositoryImpl(db_session),
+        claude_agent_gateway=_claude_agent_gateway,
+        connection_manager=_connection_manager,
+        notify_im_fn=_on_assistant_response,
+        agent_application_service=agent_service,
+    )

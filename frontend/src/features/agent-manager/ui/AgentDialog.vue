@@ -20,6 +20,7 @@ const {
   fetchAgents,
   handleLoad,
   handleUnload,
+  handleUpdate,
   setLanguage,
 } = useAgentManager()
 
@@ -60,6 +61,14 @@ async function onUnload() {
   if (project) {
     emit('update:project', project)
     handleClose()
+  }
+}
+
+async function onUpdate() {
+  if (!props.projectId || operating.value) return
+  const project = await handleUpdate(props.projectId)
+  if (project) {
+    emit('update:project', project)
   }
 }
 
@@ -115,6 +124,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
         <div v-if="activeAgentId" class="active-banner">
           <span class="active-label">{{ language === 'zh' ? '当前 Agent' : 'Active' }}:</span>
           <span class="active-name">{{ activeAgentId }}</span>
+          <button class="update-btn" @click="onUpdate" :disabled="operating">
+            {{ operating ? '...' : (language === 'zh' ? '更新' : 'Update') }}
+          </button>
           <button class="unload-btn" @click="onUnload" :disabled="operating">
             {{ operating ? '...' : (language === 'zh' ? '卸载' : 'Unload') }}
           </button>
@@ -293,7 +305,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
 }
 
 .unload-btn {
-  margin-left: auto;
   padding: 3px 10px;
   border: 1px solid var(--red);
   border-radius: var(--radius-sm);
@@ -309,6 +320,27 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
 }
 
 .unload-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.update-btn {
+  margin-left: auto;
+  padding: 3px 10px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.update-btn:hover:not(:disabled) {
+  background: var(--accent-dim);
+}
+
+.update-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

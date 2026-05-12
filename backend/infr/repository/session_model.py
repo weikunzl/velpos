@@ -57,6 +57,12 @@ class SessionModel(Base):
     cancel_requested: Mapped[int] = mapped_column(
         SmallInteger, nullable=False, default=0, server_default="0",
     )
+    team_task_id: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="", server_default="",
+    )
+    trace_id: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="", server_default="",
+    )
     created_time: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.now,
     )

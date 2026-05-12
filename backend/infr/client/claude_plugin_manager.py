@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import datetime
 import json
 import logging
 import os
@@ -63,6 +64,7 @@ class ClaudePluginManager(PluginManagerPort):
                     "scope": scope,
                     "enabled": enabled,
                     "installed": True,
+                    "updated_at": self._get_cache_mtime(marketplace, name),
                 })
                 seen_keys.add(plugin_key)
 
@@ -93,6 +95,7 @@ class ClaudePluginManager(PluginManagerPort):
                     "scope": "project",
                     "enabled": is_enabled,
                     "installed": True,
+                    "updated_at": self._get_cache_mtime(marketplace, name),
                 })
                 seen_keys.add(enabled_key)
 
@@ -110,6 +113,7 @@ class ClaudePluginManager(PluginManagerPort):
                 "scope": "",
                 "enabled": False,
                 "installed": False,
+                "updated_at": "",
             })
             seen_keys.add(key)
 
@@ -242,3 +246,13 @@ class ClaudePluginManager(PluginManagerPort):
             parts = key.split("@", 1)
             return parts[0], parts[1]
         return key, ""
+
+    def _get_cache_mtime(self, marketplace: str, name: str) -> str:
+        cache_path = self._plugins_dir / "cache" / marketplace / name
+        if not cache_path.exists():
+            return ""
+        try:
+            mtime = cache_path.stat().st_mtime
+            return datetime.datetime.fromtimestamp(mtime, tz=datetime.timezone.utc).isoformat()
+        except OSError:
+            return ""

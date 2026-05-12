@@ -14,11 +14,13 @@ import { AgentDialog } from '@features/agent-manager'
 import { MemoryButton, MemoryDialog } from '@features/memory-manager'
 import { useVoiceInput, useVideoInput } from '@features/media-input'
 import { ImButton, ImDialog, useImBinding } from '@features/im-binding'
-import { openPath } from '@features/terminal'
+import { openPath, listApplications } from '@features/terminal'
 import { useCompactContext } from '@features/compact-context'
 import { useSessionStats } from '@features/send-message/model/useSessionStats'
 import { EvolutionDialog } from '@features/evolution'
 import { TaskProgressPanel, useTaskProgress } from '@features/task-progress'
+import TeamRuntimePanel from '@features/agent-teams/ui/TeamRuntimePanel.vue'
+import WorkerSessionBreadcrumb from '@features/agent-teams/ui/WorkerSessionBreadcrumb.vue'
 
 const {
   session, messages, status, queued, waitingForSlot, recovery, currentSessionId,
@@ -51,6 +53,16 @@ const currentProject = computed(() => {
   return projects.value.find(p => p.id === pid) || null
 })
 
+const isTeamCoordinator = computed(() => {
+  return currentProject.value?.project_type === 'team' && !session.value?.team_task_id
+})
+const isTeamWorker = computed(() => Boolean(session.value?.team_task_id))
+const teamPanelVisible = ref(false)
+
+function handleTeamNavigate({ sessionId }) {
+  if (sessionId) setCurrentSessionId(sessionId)
+}
+
 function toggleDebug() {
   debugMode.value = !debugMode.value
   localStorage.setItem('pf_debug_mode', debugMode.value)
@@ -74,6 +86,10 @@ const latestTodoWriteBlock = computed(() => {
   }
   return null
 })
+
+const isSessionLoading = computed(() =>
+  Boolean(currentSessionId.value) && status.value === 'disconnected' && messages.value.length === 0
+)
 
 const MESSAGE_PAGE_SIZE = 25
 
@@ -926,6 +942,9 @@ function handleEvolutionDraftCreated(payload = {}) {
 // Project copy menu
 const showProjectCopyMenu = ref(false)
 const copiedChip = ref('')  // 'session' or 'project-path' or 'project-name'
+const showOpenWithMenu = ref(false)
+const installedApps = ref([])
+const appsLoaded = ref(false)
 const claudeResumeSessionId = computed(() => session.value?.sdk_session_id || '')
 const claudeResumeCommand = computed(() => {
   const dir = projectDir.value
@@ -964,7 +983,28 @@ function copyProjectName() {
 
 function openProjectDir() {
   showProjectCopyMenu.value = false
+  showOpenWithMenu.value = false
   openPath(projectDir.value)
+}
+
+async function loadInstalledApps() {
+  if (appsLoaded.value) return
+  try {
+    const res = await listApplications()
+    installedApps.value = res
+    appsLoaded.value = true
+  } catch { /* ignore */ }
+}
+
+function toggleOpenWithMenu() {
+  showOpenWithMenu.value = !showOpenWithMenu.value
+  if (showOpenWithMenu.value) loadInstalledApps()
+}
+
+function openWithApp(appName) {
+  showProjectCopyMenu.value = false
+  showOpenWithMenu.value = false
+  openPath(projectDir.value, appName)
 }
 
 // Close menus on click outside
@@ -1089,11 +1129,21 @@ function formatCost(value) {
 </script>
 
 <template>
+  <div class="chat-panel-wrapper">
   <div class="chat-panel" @click="handleClickOutside">
+    <WorkerSessionBreadcrumb
+      v-if="isTeamWorker"
+      :session-id="currentSessionId"
+      :team-task-id="session?.team_task_id || ''"
+      @navigate-back="handleTeamNavigate"
+    />
     <div v-if="isRunning || pendingSend" class="top-running-indicator">
       <ThinkingIndicator :visible="true" />
     </div>
-    <MessageList :messages="displayMessages" :has-more="hasMoreMessages" @load-more="loadMoreMessages">
+    <div v-if="isSessionLoading" class="session-loading-state">
+      <div class="session-loading-spinner"></div>
+    </div>
+    <MessageList v-else :messages="displayMessages" :has-more="hasMoreMessages" @load-more="loadMoreMessages">
       <template #footer>
         <div v-if="showRecoveryHint" class="recovery-indicator">
           <span class="recovery-badge">Recovered</span>
@@ -1233,6 +1283,22 @@ function formatCost(value) {
             <line x1="8" y1="21" x2="16" y2="21"/>
             <line x1="12" y1="17" x2="12" y2="21"/>
             <polyline points="7 10 10 13 17 8"/>
+          </svg>
+        </button>
+        <button
+          v-if="isTeamCoordinator"
+          class="toolbar-btn"
+          :class="{ 'toolbar-btn--active': teamPanelVisible }"
+          :aria-pressed="teamPanelVisible"
+          @click="teamPanelVisible = !teamPanelVisible"
+          data-tooltip="Team"
+          title="Team runtime — show task pipeline and worker sessions"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
           </svg>
         </button>
         </div>
@@ -1447,7 +1513,7 @@ function formatCost(value) {
               class="dash-chip dash-project"
               :class="{ 'dash-chip--copied': copiedChip === 'project' }"
               :title="projectDir"
-              @click="showProjectCopyMenu = !showProjectCopyMenu; showModelMenu = false; showPermMenu = false; showHistory = false"
+              @click="showProjectCopyMenu = !showProjectCopyMenu; showOpenWithMenu = false; showModelMenu = false; showPermMenu = false; showHistory = false"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
@@ -1456,9 +1522,34 @@ function formatCost(value) {
             </button>
             <Transition name="dropdown-fade">
             <div v-if="showProjectCopyMenu" class="dropdown-menu">
-              <button class="dropdown-item" @click="openProjectDir">
-                Open directory
-              </button>
+              <div class="dropdown-submenu-wrapper">
+                <button class="dropdown-item dropdown-item--with-arrow" @click="toggleOpenWithMenu">
+                  Open with…
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+                <Transition name="dropdown-fade">
+                <div v-if="showOpenWithMenu" class="dropdown-menu dropdown-submenu">
+                  <button class="dropdown-item app-item" @click="openProjectDir">
+                    <svg class="app-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+                    </svg>
+                    Default
+                  </button>
+                  <div v-if="installedApps.length" class="dropdown-divider"></div>
+                  <button
+                    v-for="app in installedApps"
+                    :key="app.name"
+                    class="dropdown-item app-item"
+                    @click="openWithApp(app.name)"
+                  >
+                    <img v-if="app.icon" :src="app.icon" class="app-icon" width="16" height="16" />
+                    <span v-else class="app-icon app-icon-placeholder">{{ app.name[0] }}</span>
+                    {{ app.name }}
+                  </button>
+                  <div v-if="appsLoaded && !installedApps.length" class="dropdown-empty">No apps detected</div>
+                </div>
+                </Transition>
+              </div>
               <button class="dropdown-item" @click="copyProjectPath">
                 Copy full path
               </button>
@@ -1811,13 +1902,50 @@ function formatCost(value) {
       @navigate-session="(id) => { setCurrentSessionId(id); imDialogVisible = false }"
     />
   </div>
+  <TeamRuntimePanel
+    v-if="isTeamCoordinator"
+    :project-id="currentProject?.id || ''"
+    :session-id="currentSessionId || ''"
+    :visible="teamPanelVisible"
+    @navigate-to-session="handleTeamNavigate"
+    @close="teamPanelVisible = false"
+  />
+  </div>
 </template>
 
 <style scoped>
+.session-loading-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.session-loading-spinner {
+  width: 28px;
+  height: 28px;
+  border: 2.5px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: session-spin 0.7s linear infinite;
+}
+
+@keyframes session-spin {
+  to { transform: rotate(360deg); }
+}
+
+.chat-panel-wrapper {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+
 .chat-panel {
   position: relative;
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-width: 0;
   height: 100%;
   overflow: hidden;
   background: transparent;
@@ -2114,7 +2242,62 @@ function formatCost(value) {
   color: var(--text-primary);
 }
 
+.dropdown-item--with-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.dropdown-submenu-wrapper {
+  position: relative;
+}
+
+.dropdown-submenu {
+  position: absolute;
+  left: calc(100% + 4px);
+  bottom: -6px;
+  top: auto;
+  min-width: 170px;
+}
+
+.dropdown-divider {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--glass-border);
+}
+
+.dropdown-empty {
+  padding: 6px 10px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+
 .dropdown-item.active {
+  font-weight: 600;
+}
+
+.app-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 3px;
+}
+
+.app-icon-placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--layer-active);
+  color: var(--text-muted);
+  font-size: 10px;
   font-weight: 600;
 }
 

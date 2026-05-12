@@ -45,6 +45,11 @@ class TerminalGateway(ABC):
         ...
 
     @abstractmethod
-    async def open_path(self, path: str) -> dict[str, Any]:
-        """Open a file or directory using the system default handler."""
+    async def open_path(self, path: str, app: str | None = None) -> dict[str, Any]:
+        """Open a file or directory using the system default handler or a specific app."""
+        ...
+
+    @abstractmethod
+    async def list_applications(self) -> list[dict[str, str]]:
+        """List applications available to open directories/files."""
         ...

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -20,6 +22,20 @@ class AgentCategoryInfo(BaseModel):
 
 class AgentListResponse(BaseModel):
     categories: list[AgentCategoryInfo]
+
+
+class TeamTemplateInfo(BaseModel):
+    id: str
+    name: str
+    description: str
+    mode: str
+    pipeline: list[dict[str, Any]] = Field(default_factory=list)
+    members: list[dict[str, Any]] = Field(default_factory=list)
+    default_config: dict[str, Any] = Field(default_factory=dict)
+
+
+class TeamTemplateListResponse(BaseModel):
+    templates: list[TeamTemplateInfo]
 
 
 class LoadAgentRequest(BaseModel):

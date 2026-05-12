@@ -36,5 +36,8 @@ class TerminalApplicationService:
     async def close_pty(self, terminal_id: str) -> None:
         await self._terminal_gateway.close_pty(terminal_id)
 
-    async def open_path(self, path: str) -> dict[str, Any]:
-        return await self._terminal_gateway.open_path(path)
+    async def open_path(self, path: str, app: str | None = None) -> dict[str, Any]:
+        return await self._terminal_gateway.open_path(path, app=app)
+
+    async def list_applications(self) -> list[dict[str, str]]:
+        return await self._terminal_gateway.list_applications()

@@ -27,3 +27,7 @@ class OpenPathRequest(BaseModel):
         min_length=1,
         description="File or directory path to open",
     )
+    app: str | None = Field(
+        default=None,
+        description="Application name to open with (e.g. 'Visual Studio Code')",
+    )

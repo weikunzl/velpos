@@ -12,11 +12,12 @@ from application.message.attachment_application_service import AttachmentApplica
 from application.session.command.run_query_command import RunQueryCommand
 from application.session.session_application_service import SessionApplicationService
 from application.terminal.terminal_application_service import TerminalApplicationService
+from application.team_task.team_coordinator_service import TeamCoordinatorService
 from domain.shared.async_utils import safe_create_task
 from infr.client.connection_manager import ConnectionManager
 from infr.client.claude_agent_gateway import ClaudeAgentGateway as ClaudeAgentGatewayImpl
 from ohs.assembler.session_assembler import SessionAssembler
-from ohs.dependencies import get_session_application_service, get_connection_manager, get_claude_agent_gateway, get_attachment_application_service, get_terminal_application_service, get_create_session_service_factory
+from ohs.dependencies import get_session_application_service, get_connection_manager, get_claude_agent_gateway, get_attachment_application_service, get_terminal_application_service, get_create_session_service_factory, get_team_coordinator_service
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,10 @@ AttachmentServiceDep = Annotated[
 TerminalServiceDep = Annotated[
     TerminalApplicationService,
     Depends(get_terminal_application_service),
+]
+TeamServiceDep = Annotated[
+    TeamCoordinatorService,
+    Depends(get_team_coordinator_service),
 ]
 
 
@@ -117,6 +122,7 @@ async def websocket_endpoint(
     gateway: GatewayDep,
     session_service_factory: SessionServiceFactoryDep,
     attachment_service: AttachmentServiceDep,
+    team_service: TeamServiceDep,
 ) -> None:
     from domain.shared.business_exception import BusinessException
 
@@ -300,9 +306,8 @@ async def websocket_endpoint(
 
             elif action == "cancel":
                 try:
-                    # Run cancel in background — cancel_query handles rewind + broadcast
                     safe_create_task(service.cancel_query(session_id))
-                    # Immediately signal cancellation is in progress
+                    safe_create_task(team_service.cancel_team_session(session_id))
                     await websocket.send_json({
                         "event": "info",
                         "message": "Cancelling...",

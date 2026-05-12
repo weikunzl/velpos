@@ -16,6 +16,8 @@ class Project:
     _agents: dict[str, dict] = field(default_factory=dict)
     _plugins: dict[str, dict] = field(default_factory=dict)
     _sort_order: int = 0
+    _project_type: str = "single"
+    _team_config: dict = field(default_factory=dict)
     _active_claude_md_revision_id: str = ""
     _claude_md_file_hash: str = ""
     _created_at: datetime = field(default_factory=datetime.now)
@@ -45,16 +47,44 @@ class Project:
         return self._agents.get("current")
 
     def load_agent(self, agent_id: str, language: str) -> None:
+        locked_by = self._agents.get("locked_by_task")
         self._agents = {"current": {"id": agent_id, "language": language}}
+        if locked_by:
+            self._agents["locked_by_task"] = locked_by
         self._updated_at = datetime.now()
 
     def unload_agent(self) -> None:
+        locked_by = self._agents.get("locked_by_task")
         self._agents = {}
+        if locked_by:
+            self._agents["locked_by_task"] = locked_by
         self._updated_at = datetime.now()
+
+    def lock_agent(self, task_id: str) -> None:
+        self._agents["locked_by_task"] = task_id
+        self._updated_at = datetime.now()
+
+    def unlock_agent(self) -> None:
+        self._agents.pop("locked_by_task", None)
+        self._updated_at = datetime.now()
+
+    def is_agent_locked(self) -> bool:
+        return bool(self._agents.get("locked_by_task"))
+
+    def agent_locked_by(self) -> str:
+        return self._agents.get("locked_by_task", "")
 
     @property
     def plugins(self) -> dict[str, dict]:
         return dict(self._plugins)
+
+    @property
+    def project_type(self) -> str:
+        return self._project_type
+
+    @property
+    def team_config(self) -> dict:
+        return dict(self._team_config)
 
     @property
     def sort_order(self) -> int:
@@ -98,7 +128,7 @@ class Project:
     # ------------------------------------------------------------------
 
     @classmethod
-    def create(cls, name: str, dir_path: str) -> Project:
+    def create(cls, name: str, dir_path: str, project_type: str = "single", team_config: dict | None = None) -> Project:
         now = datetime.now()
         return cls(
             _id=uuid.uuid4().hex[:8],
@@ -107,6 +137,8 @@ class Project:
             _agents={},
             _plugins={},
             _sort_order=0,
+            _project_type=project_type,
+            _team_config=team_config or {},
             _active_claude_md_revision_id="",
             _claude_md_file_hash="",
             _created_at=now,
@@ -122,6 +154,8 @@ class Project:
         agents: dict[str, dict],
         plugins: dict[str, dict] | None = None,
         sort_order: int = 0,
+        project_type: str = "single",
+        team_config: dict | None = None,
         active_claude_md_revision_id: str = "",
         claude_md_file_hash: str = "",
         created_at: datetime | None = None,
@@ -134,6 +168,8 @@ class Project:
             _agents=agents,
             _plugins=plugins or {},
             _sort_order=sort_order,
+            _project_type=project_type,
+            _team_config=team_config or {},
             _active_claude_md_revision_id=active_claude_md_revision_id,
             _claude_md_file_hash=claude_md_file_hash,
             _created_at=created_at or datetime.now(),
@@ -192,4 +228,8 @@ class Project:
         key = plugin_type.value
         if self._plugins.pop(key, None) is not None:
             self._updated_at = datetime.now()
+
+    def update_team_config(self, config: dict) -> None:
+        self._team_config = dict(config)
+        self._updated_at = datetime.now()
 

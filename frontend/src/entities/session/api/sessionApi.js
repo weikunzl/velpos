@@ -12,8 +12,9 @@ export function getSession(sessionId) {
   return get(`/sessions/${sessionId}`)
 }
 
-export function deleteSession(sessionId) {
-  return del(`/sessions/${sessionId}`)
+export function deleteSession(sessionId, { cascade = false } = {}) {
+  const query = cascade ? '?cascade=true' : ''
+  return del(`/sessions/${sessionId}${query}`)
 }
 
 export function batchDeleteSessions(sessionIds) {
