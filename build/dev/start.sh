@@ -21,6 +21,14 @@ if [ -f "$SCRIPT_DIR/.env" ]; then
     # shellcheck disable=SC1091
     source "$SCRIPT_DIR/.env"
     set +a
+elif [ -f "$SCRIPT_DIR/.env.example" ]; then
+    echo "No .env found. Creating from .env.example..."
+    cp "$SCRIPT_DIR/.env.example" "$SCRIPT_DIR/.env"
+    set -a
+    # shellcheck disable=SC1091
+    source "$SCRIPT_DIR/.env"
+    set +a
+    echo "Created $SCRIPT_DIR/.env — edit it if needed."
 fi
 
 BACKEND_DIR="$ROOT_DIR/backend"
@@ -77,10 +85,29 @@ check_prerequisites() {
     if command -v uv &>/dev/null; then
         ok "uv $(uv --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo '(available)')"
     else
-        error "uv not found"
-        echo "  Install: curl -LsSf https://astral.sh/uv/install.sh | sh"
-        echo "  More info: https://docs.astral.sh/uv/"
-        missing=1
+        warn "uv not found"
+        if command -v curl &>/dev/null; then
+            echo -n "  Install uv now? [y/N] "
+            read -r yn
+            if [ "$yn" = "y" ] || [ "$yn" = "Y" ]; then
+                curl -LsSf https://astral.sh/uv/install.sh | sh
+                export PATH="$HOME/.local/bin:$PATH"
+                if command -v uv &>/dev/null; then
+                    ok "uv installed successfully"
+                else
+                    error "uv installation failed"
+                    missing=1
+                fi
+            else
+                error "uv is required"
+                echo "  Install: curl -LsSf https://astral.sh/uv/install.sh | sh"
+                missing=1
+            fi
+        else
+            error "uv not found"
+            echo "  Install: curl -LsSf https://astral.sh/uv/install.sh | sh"
+            missing=1
+        fi
     fi
 
     # Node.js >= 18
@@ -203,6 +230,9 @@ start_backend() {
     info "Starting backend on port $BACKEND_PORT..."
 
     cd "$BACKEND_DIR"
+    info "Syncing backend dependencies..."
+    uv sync --frozen 2>&1 | tail -3 || true
+
     nohup uv run uvicorn main:app \
         --host 0.0.0.0 \
         --port "$BACKEND_PORT" \
@@ -216,7 +246,7 @@ start_backend() {
     local retries=0
     while ! curl -sf "http://localhost:$BACKEND_PORT/api/health" > /dev/null 2>&1; do
         retries=$((retries + 1))
-        if [ $retries -gt 30 ]; then
+        if [ $retries -gt 60 ]; then
             error "Backend failed to start. Check logs: $BACKEND_LOG"
             return 1
         fi
@@ -235,6 +265,10 @@ start_frontend() {
     info "Starting frontend on port $FRONTEND_PORT..."
 
     cd "$FRONTEND_DIR"
+    if [ ! -d "node_modules" ] || [ "package-lock.json" -nt "node_modules/.package-lock.json" ] 2>/dev/null; then
+        info "Installing frontend dependencies..."
+        npm install
+    fi
     nohup npm run dev -- --host 0.0.0.0 --port "$FRONTEND_PORT" > "$FRONTEND_LOG" 2>&1 &
 
     local pid=$!

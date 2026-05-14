@@ -635,17 +635,18 @@ class ProjectApplicationService:
         for dir_path in dir_paths:
             if not dir_path:
                 continue
-            existing = await self._project_repository.find_by_dir_path(dir_path)
+            normalized = str(Path(dir_path).expanduser().resolve())
+            existing = await self._project_repository.find_by_dir_path(normalized)
             if existing:
                 mappings[dir_path] = existing.id
             else:
-                name = os.path.basename(dir_path.rstrip("/")) or dir_path
-                project = Project.create(name=name, dir_path=dir_path)
+                name = os.path.basename(normalized) or dir_path
+                project = Project.create(name=name, dir_path=normalized)
                 await self._project_repository.save(project)
                 mappings[dir_path] = project.id
                 logger.info(
                     "Auto-created project: id=%s, name=%s, dir=%s",
-                    project.id, project.name, dir_path,
+                    project.id, project.name, normalized,
                 )
         return mappings
 

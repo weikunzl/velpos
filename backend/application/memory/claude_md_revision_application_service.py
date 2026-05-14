@@ -200,6 +200,18 @@ class ClaudeMdRevisionApplicationService:
         if active is None:
             active = await self._revision_repository.find_active_by_project_id(project.id)
         if active is not None:
+            if (
+                active.version_no == 1
+                and active.state == ClaudeMdRevisionState.APPLIED
+                and not active.content
+                and content
+            ):
+                await self._revision_repository.remove(active.id)
+                replacement = ClaudeMdRevision.create_initial(project.id, content, file_hash)
+                project.update_claude_md_revision(replacement.id, file_hash)
+                await self._revision_repository.save(replacement)
+                await self._project_repository.save(project)
+                return replacement
             return active
 
         initial = ClaudeMdRevision.create_initial(project.id, content, file_hash)

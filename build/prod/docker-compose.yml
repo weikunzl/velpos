@@ -36,7 +36,7 @@ services:
       CLAUDE_CLI_PATH: /usr/local/bin/claude
       PROJECTS_ROOT_DIR: /data/projects
     volumes:
-      - ${PROJECTS_HOST_DIR:-~/.agent_projects}:/data/projects
+      - ${PROJECTS_HOST_DIR:-/tmp/agent_projects}:/data/projects
     depends_on:
       mysql:
         condition: service_healthy

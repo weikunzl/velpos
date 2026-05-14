@@ -27,7 +27,12 @@ const selectedRule = ref(null)
 const ruleEditing = ref(false)
 const ruleDraft = ref({ path: '', content: '', pathsText: '' })
 
-const selectedContent = computed(() => selectedRevision.value?.content ?? content.value)
+const selectedContent = computed(() => {
+  if (selectedRevision.value && activeRevision.value && selectedRevision.value.id === activeRevision.value.id) {
+    return content.value
+  }
+  return selectedRevision.value?.content ?? content.value
+})
 const canEditSelected = computed(() => !loading.value)
 
 function formatRulePaths(paths = []) {

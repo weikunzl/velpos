@@ -28,17 +28,15 @@ const interactiveAnswered = ref(false)
 
 function handleChoiceAnswer(data) {
   if (interactiveAnswered.value) return
-  interactiveAnswered.value = true
-  if (wsConnection?.value) {
-    wsConnection.value.send({ action: 'user_response', data })
+  if (wsConnection?.value && wsConnection.value.send({ action: 'user_response', data })) {
+    interactiveAnswered.value = true
   }
 }
 
 function handlePermissionRespond(data) {
   if (interactiveAnswered.value) return
-  interactiveAnswered.value = true
-  if (wsConnection?.value) {
-    wsConnection.value.send({ action: 'user_response', data })
+  if (wsConnection?.value && wsConnection.value.send({ action: 'user_response', data })) {
+    interactiveAnswered.value = true
   }
 }
 

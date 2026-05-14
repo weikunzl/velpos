@@ -399,13 +399,23 @@ async def global_exception_handler(
 
 @app.get("/api/health")
 async def health():
+    from sqlalchemy import text
+    from infr.config.database import async_session_factory
     from ohs.dependencies import get_im_config, get_im_channel_registry
+
+    db_ok = True
+    try:
+        async with async_session_factory() as session:
+            await session.execute(text("SELECT 1"))
+    except Exception:
+        db_ok = False
 
     im_config = get_im_config()
     im_channel_registry = get_im_channel_registry()
 
     return {
-        "status": "ok",
+        "status": "ok" if db_ok else "degraded",
+        "database": "ok" if db_ok else "unreachable",
         "features": {
             "im": im_config.enabled,
             "im_channels": [ct.value for ct in im_channel_registry.registered_types],
