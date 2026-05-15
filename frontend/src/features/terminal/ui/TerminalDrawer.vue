@@ -122,7 +122,12 @@ function connectTab(tab) {
     ws.send(JSON.stringify({ cwd: props.projectDir || null, cols, rows }))
   }
   ws.onmessage = (event) => {
-    const message = JSON.parse(event.data)
+    let message
+    try {
+      message = JSON.parse(event.data)
+    } catch {
+      return
+    }
     if (message.event === 'ready') {
       tab.status = 'connected'
       tab.terminalId = message.terminal_id || ''

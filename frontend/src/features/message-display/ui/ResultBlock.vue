@@ -1,6 +1,4 @@
 <script setup>
-import { formatDuration } from '../lib/formatters'
-
 defineProps({
   result: {
     type: Object,
@@ -81,21 +79,6 @@ defineProps({
 
 .msg-result.error .result-label {
   color: var(--red);
-}
-
-.result-meta {
-  display: flex;
-  justify-content: center;
-  gap: 16px;
-  padding: 4px 0;
-  font-size: 11px;
-  font-family: var(--font-mono);
-  color: var(--text-muted);
-}
-
-.meta-item {
-  display: flex;
-  align-items: center;
 }
 
 .result-text {

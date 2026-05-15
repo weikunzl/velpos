@@ -1,6 +1,7 @@
 <script setup>
-import { ref, watch, onBeforeUnmount } from 'vue'
+import { ref, watch, nextTick, onBeforeUnmount } from 'vue'
 import * as pdfjsLib from 'pdfjs-dist'
+import { useCancellableAsync } from '@shared/lib/useCancellableAsync'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.mjs',
@@ -20,19 +21,31 @@ const scale = ref(1.5)
 
 let pdfDoc = null
 let renderTask = null
+const loadTracker = useCancellableAsync()
 
 async function loadPdf() {
+  const version = loadTracker.start()
   loading.value = true
   error.value = ''
   try {
-    pdfDoc = await pdfjsLib.getDocument(props.src).promise
+    const doc = await pdfjsLib.getDocument(props.src).promise
+    if (!loadTracker.isCurrent(version)) {
+      doc.destroy()
+      return
+    }
+    if (pdfDoc) pdfDoc.destroy()
+    pdfDoc = doc
     pageCount.value = pdfDoc.numPages
     currentPage.value = 1
-    await renderPage(1)
   } catch (e) {
+    if (!loadTracker.isCurrent(version)) return
     error.value = e.message || 'Failed to load PDF'
   } finally {
-    loading.value = false
+    if (loadTracker.isCurrent(version)) loading.value = false
+  }
+  if (loadTracker.isCurrent(version) && pdfDoc) {
+    await nextTick()
+    await renderPage(1)
   }
 }
 

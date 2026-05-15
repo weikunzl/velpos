@@ -17,7 +17,7 @@ class SessionSnapshotRepositoryImpl(SessionSnapshotRepository):
         self._session = session
 
     async def save(self, snapshot: SessionSnapshot) -> None:
-        self._session.add(self._to_model(snapshot))
+        await self._session.merge(self._to_model(snapshot))
         await self._session.flush()
 
     async def find_by_session_id(self, session_id: str) -> list[SessionSnapshot]:

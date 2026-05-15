@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useTeamRuntime } from '../model/useTeamRuntime'
 import { getProject } from '@entities/project'
+import { useCancellableAsync } from '@shared/lib/useCancellableAsync'
 import WorkflowEditor from './WorkflowEditor.vue'
 
 const props = defineProps({
@@ -14,10 +15,11 @@ const emit = defineEmits(['navigate-to-session', 'close'])
 
 const { getTasksForSession, loadTimeline, loadLinkedSessions, getWorkerSessionState } = useTeamRuntime()
 
-const tasks = getTasksForSession(props.sessionId)
+const tasks = computed(() => getTasksForSession(props.sessionId).value)
 const linkedSessions = ref([])
 const loading = ref(false)
 const teamConfig = ref(null)
+const refreshTracker = useCancellableAsync()
 
 const workflowSteps = computed(() => {
   if (!teamConfig.value) return []
@@ -48,21 +50,29 @@ function statusFromTaskStatus(status) {
 
 async function refresh() {
   if (!props.sessionId || !props.projectId) return
+  const version = refreshTracker.start()
   loading.value = true
   try {
     await loadTimeline(props.projectId, props.sessionId)
+    if (!refreshTracker.isCurrent(version)) return
     linkedSessions.value = await loadLinkedSessions(props.projectId, props.sessionId)
+    if (!refreshTracker.isCurrent(version)) return
     try {
       const project = await getProject(props.projectId)
-      teamConfig.value = project.team_config || null
+      if (!refreshTracker.isCurrent(version)) return
+      teamConfig.value = project?.team_config || null
     } catch {}
   } finally {
-    loading.value = false
+    if (refreshTracker.isCurrent(version)) loading.value = false
   }
 }
 
 watch(() => props.visible, (val) => {
   if (val) refresh()
+})
+
+watch(() => props.sessionId, () => {
+  if (props.visible) refresh()
 })
 
 onMounted(() => {
@@ -135,7 +145,7 @@ function navigateToWorker(session) {
         <WorkflowEditor
           :mode="workflowMode"
           :steps="workflowSteps"
-          :tasks="tasks.value"
+          :tasks="tasks"
           :editable="false"
         />
       </section>
@@ -143,11 +153,11 @@ function navigateToWorker(session) {
       <!-- Pipeline / Tasks -->
       <section class="panel-section">
         <h4 class="section-title">Tasks</h4>
-        <div v-if="loading && tasks.value.length === 0" class="loading-text">Loading...</div>
-        <div v-else-if="tasks.value.length === 0" class="empty-text">No tasks dispatched yet</div>
+        <div v-if="loading && tasks.length === 0" class="loading-text">Loading...</div>
+        <div v-else-if="tasks.length === 0" class="empty-text">No tasks dispatched yet</div>
         <div v-else class="task-list">
           <div
-            v-for="task in tasks.value"
+            v-for="task in tasks"
             :key="task.task_id"
             class="task-item"
             :class="'task-' + task.status"

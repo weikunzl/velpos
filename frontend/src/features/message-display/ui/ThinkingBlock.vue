@@ -31,7 +31,7 @@ const truncatedText = computed(() => {
       </svg>
     </div>
     <div class="thinking-content-wrapper">
-      <div class="thinking-content">{{ truncatedText }}</div>
+      <div class="thinking-content">{{ expanded ? (block.thinking || '') : truncatedText }}</div>
     </div>
   </div>
 </template>

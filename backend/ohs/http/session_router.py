@@ -24,6 +24,7 @@ from ohs.http.dto.session_dto import (
     BatchDeleteRequest,
     BranchSessionRequest,
     BranchSessionResponse,
+    CompareSessionResponse,
     ConvergeBranchesRequest,
     ConvergeBranchesResponse,
     CreateSessionRequest,

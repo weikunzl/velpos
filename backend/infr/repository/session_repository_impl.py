@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.session.model.message import Message
 from domain.session.model.message_type import MessageType
+from domain.shared.utils import safe_json_loads
 from domain.session.model.session import Session
 from domain.session.model.session_status import SessionStatus
 from domain.session.model.usage import Usage
@@ -151,7 +152,7 @@ class SessionRepositoryImpl(SessionRepository):
 
     @staticmethod
     def _deserialize_messages(json_str: str) -> list[Message]:
-        items: list[dict[str, Any]] = json.loads(json_str)
+        items: list[dict[str, Any]] = safe_json_loads(json_str, default=[])
         return [
             Message(
                 message_type=MessageType(item["type"]),

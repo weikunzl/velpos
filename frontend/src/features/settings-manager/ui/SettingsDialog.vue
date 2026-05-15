@@ -1,9 +1,10 @@
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useSettingsManager } from '../model/useSettingsManager'
 import { useUserPreferences } from '@shared/lib/useUserPreferences'
 import { useDialogManager } from '@shared/lib/useDialogManager'
 import { useGlobalHotkeys } from '@shared/lib/useGlobalHotkeys.js'
+import { useTimeout } from '@shared/lib/useTimeout'
 import CustomSelect from '@shared/ui/CustomSelect.vue'
 
 const props = defineProps({
@@ -83,7 +84,6 @@ const {
 const editingProfileId = ref(null)
 const showAddForm = ref(false)
 const showJsonPreview = ref(false)
-const jsonPreviewEl = ref(null)
 const addForm = ref({ name: '', host: '', api_key: '', auth_env_name: 'ANTHROPIC_API_KEY', model_config: {} })
 const editForm = ref({ name: '', host: '', api_key: '', auth_env_name: 'ANTHROPIC_API_KEY', model_config: {} })
 const settingsData = ref(null)
@@ -251,39 +251,23 @@ function onFetchModelsForEdit() {
 }
 
 const copyJsonSuccess = ref(false)
-let copyJsonTimer = null
 
 const saveSuccess = ref(false)
+const { set: setTimer } = useTimeout()
 
 async function handleSave() {
   await saveSettings(settingsData.value)
   if (!error.value) {
     saveSuccess.value = true
-    setTimeout(() => { saveSuccess.value = false }, 1500)
+    setTimer(() => { saveSuccess.value = false }, 1500)
   }
 }
-
-function handleKeydown(e) {
-  if (e.key === 'Escape' && props.visible) {
-    emit('close')
-  }
-}
-
-onMounted(() => {
-  document.addEventListener('keydown', handleKeydown)
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener('keydown', handleKeydown)
-  clearTimeout(copyJsonTimer)
-})
 
 async function copyJsonPreview() {
   try {
     await navigator.clipboard.writeText(jsonPreviewText.value)
     copyJsonSuccess.value = true
-    clearTimeout(copyJsonTimer)
-    copyJsonTimer = setTimeout(() => { copyJsonSuccess.value = false }, 1500)
+    setTimer(() => { copyJsonSuccess.value = false }, 1500)
   } catch (err) {
     console.error('Failed to copy JSON:', err)
   }

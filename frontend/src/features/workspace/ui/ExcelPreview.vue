@@ -23,6 +23,7 @@ async function loadExcel() {
     const response = await fetch(props.src)
     const buffer = await response.arrayBuffer()
     const workbook = XLSX.read(buffer, { type: 'array' })
+    workbookCache = workbook
     sheets.value = workbook.SheetNames
     activeSheet.value = 0
     parseSheet(workbook, 0)
@@ -62,11 +63,6 @@ async function switchSheet(index) {
 watch(() => props.src, async () => {
   workbookCache = null
   await loadExcel()
-  if (sheets.value.length > 0) {
-    const response = await fetch(props.src)
-    const buffer = await response.arrayBuffer()
-    workbookCache = XLSX.read(buffer, { type: 'array' })
-  }
 }, { immediate: true })
 </script>
 

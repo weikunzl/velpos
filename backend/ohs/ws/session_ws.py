@@ -328,16 +328,19 @@ async def websocket_endpoint(
                     })
                 else:
                     async def _rewind_background(target_message_id=message_id, target_message_index=message_index) -> None:
+                        bg_service = await session_service_factory()
                         try:
                             if target_message_id:
-                                await service.rewind_to_message_id(session_id, str(target_message_id))
+                                await bg_service.rewind_to_message_id(session_id, str(target_message_id))
                             else:
-                                await service.rewind_to_message(session_id, int(target_message_index))
+                                await bg_service.rewind_to_message(session_id, int(target_message_index))
                         except Exception as e:
                             await websocket.send_json({
                                 "event": "error",
                                 "message": str(e),
                             })
+                        finally:
+                            await bg_service.close()
 
                     safe_create_task(_rewind_background())
                     await websocket.send_json({

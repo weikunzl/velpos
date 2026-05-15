@@ -6,6 +6,7 @@ import {
   readWorkspaceFile,
   readWorkspaceFileAtRef,
 } from '@entities/project/api/projectApi'
+import { useCancellableAsync } from '@shared/lib/useCancellableAsync'
 
 export function useWorkspace() {
   const files = ref([])
@@ -17,6 +18,8 @@ export function useWorkspace() {
   const reading = ref(false)
   const historyLoading = ref(false)
   const error = ref('')
+  const openFileTracker = useCancellableAsync()
+  const historyFileTracker = useCancellableAsync()
 
   async function loadFiles(projectId, options = {}) {
     if (!projectId) return
@@ -35,6 +38,7 @@ export function useWorkspace() {
 
   async function openFile(projectId, path) {
     if (!projectId || !path) return
+    const version = openFileTracker.start()
     reading.value = true
     error.value = ''
     historicalFile.value = null
@@ -44,14 +48,16 @@ export function useWorkspace() {
         readWorkspaceFile(projectId, path),
         getWorkspaceDiff(projectId, path),
       ])
+      if (!openFileTracker.isCurrent(version)) return
       selectedFile.value = file
       selectedDiff.value = diff
     } catch (e) {
+      if (!openFileTracker.isCurrent(version)) return
       selectedFile.value = null
       selectedDiff.value = null
       error.value = e.message || 'Failed to read file'
     } finally {
-      reading.value = false
+      if (openFileTracker.isCurrent(version)) reading.value = false
     }
   }
 
@@ -73,17 +79,20 @@ export function useWorkspace() {
 
   async function openHistoricalFile(projectId, path, ref) {
     if (!projectId || !path || !ref) return null
+    const version = historyFileTracker.start()
     historyLoading.value = true
     try {
       const file = await readWorkspaceFileAtRef(projectId, path, ref)
+      if (!historyFileTracker.isCurrent(version)) return null
       historicalFile.value = file
       return file
     } catch (e) {
+      if (!historyFileTracker.isCurrent(version)) return null
       historicalFile.value = null
       error.value = e.message || 'Failed to read historical file'
       return null
     } finally {
-      historyLoading.value = false
+      if (historyFileTracker.isCurrent(version)) historyLoading.value = false
     }
   }
 

@@ -1,4 +1,3 @@
-export { default as StatusBar } from './ui/StatusBar.vue'
 export { useSession } from './model/useSession'
 export {
   createSession,

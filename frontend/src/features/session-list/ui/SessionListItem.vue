@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, nextTick, onBeforeUnmount } from 'vue'
+import { useTimeout } from '@shared/lib/useTimeout'
 
 const props = defineProps({
   session: {
@@ -33,25 +34,26 @@ const editing = ref(false)
 const editName = ref('')
 const editInput = ref(null)
 const copySuccess = ref(false)
-let confirmTimer = null
-let copyTimer = null
+const { set: setTimer, clear: clearTimer } = useTimeout()
+let confirmTimerId = null
 
 function requestDelete() {
   showDeleteConfirm.value = true
-  clearTimeout(confirmTimer)
-  confirmTimer = setTimeout(() => {
+  if (confirmTimerId) clearTimer(confirmTimerId)
+  confirmTimerId = setTimer(() => {
     showDeleteConfirm.value = false
+    confirmTimerId = null
   }, 3000)
 }
 
 function confirmDelete() {
-  clearTimeout(confirmTimer)
+  if (confirmTimerId) { clearTimer(confirmTimerId); confirmTimerId = null }
   showDeleteConfirm.value = false
   emit('delete', props.session.session_id)
 }
 
 function cancelDelete() {
-  clearTimeout(confirmTimer)
+  if (confirmTimerId) { clearTimer(confirmTimerId); confirmTimerId = null }
   showDeleteConfirm.value = false
 }
 
@@ -141,19 +143,13 @@ async function copySessionId() {
   try {
     await navigator.clipboard.writeText(props.session.session_id)
     copySuccess.value = true
-    clearTimeout(copyTimer)
-    copyTimer = setTimeout(() => {
+    setTimer(() => {
       copySuccess.value = false
     }, 1500)
   } catch (err) {
     console.error('Failed to copy session ID:', err)
   }
 }
-
-onBeforeUnmount(() => {
-  clearTimeout(confirmTimer)
-  clearTimeout(copyTimer)
-})
 </script>
 
 <template>

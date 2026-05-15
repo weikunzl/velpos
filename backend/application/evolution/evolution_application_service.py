@@ -112,7 +112,9 @@ class EvolutionApplicationService:
         lessons: list[dict[str, Any]] = []
         seen = set()
         for session in sessions:
-            for index, message in enumerate(session.messages[-60:]):
+            msgs = session.messages
+            start = max(0, len(msgs) - 60)
+            for index, message in enumerate(msgs[start:], start=start):
                 if message.message_type != MessageType.USER:
                     continue
                 text = str(message.content.get("text", "")).strip()

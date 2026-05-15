@@ -9,6 +9,7 @@ from domain.channel_profile.model.channel_profile import ChannelProfile
 from domain.channel_profile.repository.channel_profile_repository import (
     ChannelProfileRepository,
 )
+from domain.shared.utils import safe_json_loads
 from infr.repository.channel_profile_model import ChannelProfileModel
 
 
@@ -89,7 +90,7 @@ class ChannelProfileRepositoryImpl(ChannelProfileRepository):
             host=model.host,
             api_key=model.api_key,
             auth_env_name=model.auth_env_name,
-            model_config=json.loads(model.model_config_json),
+            model_config=safe_json_loads(model.model_config_json),
             is_active=model.is_active == 1,
             created_time=model.created_time,
             updated_time=model.updated_time,

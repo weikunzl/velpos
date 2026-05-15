@@ -1,7 +1,6 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { initAgent, getInitStatus } from '@entities/project'
-import { getSession } from '@entities/session'
 
 const props = defineProps({
   visible: {

@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import json
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.team_task.model.team_task import TeamTask
 from domain.team_task.model.team_task_status import TeamTaskStatus
 from domain.team_task.repository.team_task_repository import TeamTaskRepository
+from domain.shared.utils import safe_json_loads
 from infr.repository.team_task_model import TeamTaskModel
 
 
@@ -98,7 +97,7 @@ class TeamTaskRepositoryImpl(TeamTaskRepository):
     def _to_domain(model: TeamTaskModel) -> TeamTask:
         result_data = model.result_data_json
         if isinstance(result_data, str):
-            result_data = json.loads(result_data) if result_data else {}
+            result_data = safe_json_loads(result_data)
         return TeamTask.reconstitute(
             task_id=model.task_id,
             main_project_id=model.main_project_id,

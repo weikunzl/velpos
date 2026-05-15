@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { downloadWorkspaceSelection } from '@entities/project/api/projectApi'
 import hljs from 'highlight.js/lib/common'
 import { useGlobalHotkeys } from '../../../shared/lib/useGlobalHotkeys'
+import { useTimeout } from '@shared/lib/useTimeout'
 import { useWorkspace } from '../model/useWorkspace'
 import { getFilePreviewType, getFileRawUrl } from '../lib/fileTypes'
 import ImagePreview from './ImagePreview.vue'
@@ -55,6 +56,7 @@ const copyStatus = ref('')
 let copyStatusTimer = null
 let historyTransitionTimer = null
 let historyAnchorFrame = null
+const { set: setTimer, clear: clearTimerById } = useTimeout()
 
 const projectId = computed(() => props.project?.id || '')
 const fileLines = computed(() => (selectedFile.value?.content || '').split('\n'))
@@ -197,8 +199,8 @@ function shellQuote(value) {
 
 function showCopyStatus(message) {
   copyStatus.value = message
-  if (copyStatusTimer) clearTimeout(copyStatusTimer)
-  copyStatusTimer = setTimeout(() => { copyStatus.value = '' }, 1600)
+  if (copyStatusTimer) clearTimerById(copyStatusTimer)
+  copyStatusTimer = setTimer(() => { copyStatus.value = ''; copyStatusTimer = null }, 1600)
 }
 
 async function copyText(text, message) {
@@ -437,7 +439,7 @@ async function ensureVersionContent(node) {
 
 function clearHistoryTransition() {
   if (historyTransitionTimer) {
-    clearTimeout(historyTransitionTimer)
+    clearTimerById(historyTransitionTimer)
     historyTransitionTimer = null
   }
   if (historyAnchorFrame) {
@@ -481,7 +483,7 @@ function startHistoryTransition(previousContent, nextContent, anchor) {
     restoreHistoryScrollAnchor(anchor)
     holdHistoryScrollAnchor(anchor)
   })
-  historyTransitionTimer = setTimeout(() => {
+  historyTransitionTimer = setTimer(() => {
     historyTransitionTimer = null
     setSettledHistoryRows()
     nextTick(() => restoreHistoryScrollAnchor(anchor))
@@ -507,7 +509,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleKeydown)
-  if (copyStatusTimer) clearTimeout(copyStatusTimer)
   clearHistoryTransition()
 })
 

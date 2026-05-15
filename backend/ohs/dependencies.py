@@ -229,7 +229,7 @@ async def _on_assistant_response(session_id: str, content: str) -> None:
         session_id, exc_info=last_err,
     )
     await _connection_manager.broadcast(session_id, {
-        "type": "error",
+        "event": "error",
         "message": "IM message sync failed, the message may not have been delivered to the IM channel.",
     })
 
@@ -260,7 +260,7 @@ async def _on_user_message(session_id: str, content: str) -> None:
         session_id, exc_info=last_err,
     )
     await _connection_manager.broadcast(session_id, {
-        "type": "error",
+        "event": "error",
         "message": "IM message sync failed, your message may not have been delivered to the IM channel.",
     })
 

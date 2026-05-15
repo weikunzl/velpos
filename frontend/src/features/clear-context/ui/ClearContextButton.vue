@@ -1,5 +1,6 @@
 <script setup>
-import { ref, onBeforeUnmount } from 'vue'
+import { ref } from 'vue'
+import { useTimeout } from '@shared/lib/useTimeout'
 
 const props = defineProps({
   disabled: {
@@ -15,20 +16,15 @@ const props = defineProps({
 const emit = defineEmits(['clear'])
 
 const confirming = ref(false)
-let timer = null
+const { set: setTimer, clear: clearTimer } = useTimeout()
+let timerId = null
 
 function startTimer() {
-  clearTimer()
-  timer = setTimeout(() => {
+  if (timerId) clearTimer(timerId)
+  timerId = setTimer(() => {
     confirming.value = false
+    timerId = null
   }, 3000)
-}
-
-function clearTimer() {
-  if (timer) {
-    clearTimeout(timer)
-    timer = null
-  }
 }
 
 function handleClick() {
@@ -39,13 +35,9 @@ function handleClick() {
     return
   }
   confirming.value = false
-  clearTimer()
+  if (timerId) { clearTimer(timerId); timerId = null }
   emit('clear')
 }
-
-onBeforeUnmount(() => {
-  clearTimer()
-})
 </script>
 
 <template>

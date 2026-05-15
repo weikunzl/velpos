@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onBeforeUnmount } from 'vue'
 import WorkflowNode from './WorkflowNode.vue'
 
 const props = defineProps({
@@ -85,6 +85,8 @@ function onDragEnd() {
   document.removeEventListener('mousemove', onDragMove)
   document.removeEventListener('mouseup', onDragEnd)
 }
+
+onBeforeUnmount(onDragEnd)
 </script>
 
 <template>

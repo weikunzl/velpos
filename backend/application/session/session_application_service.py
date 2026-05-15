@@ -803,6 +803,14 @@ class SessionApplicationService:
         session = await self.get_session(session_id)
         return await self.get_current_git_branch(session.project_dir)
 
+    async def force_cleanup(self, session_id: str) -> None:
+        """Disconnect and cleanup gateway state for a session without touching the DB."""
+        try:
+            await self._claude_agent_gateway.disconnect(session_id)
+        except Exception:
+            pass
+        self._claude_agent_gateway.cleanup_session(session_id)
+
     async def delete_session(self, session_id: str) -> bool:
         """Delete a session by session_id.
 
@@ -834,6 +842,17 @@ class SessionApplicationService:
 
         # Clean up all tracked gateway state for this session
         self._claude_agent_gateway.cleanup_session(session_id)
+
+        # Clean up session lock to prevent memory leak
+        async with self._session_locks_guard:
+            lock = self._session_locks.get(session_id)
+            if lock and not lock.locked():
+                self._session_locks.pop(session_id, None)
+
+        # Clean up other class-level tracking state
+        self._cancelled_sessions.discard(session_id)
+        self._queued_messages.pop(session_id, None)
+        self._waiting_for_slot.discard(session_id)
 
         removed = await self._session_repository.remove(session_id)
         if not removed:

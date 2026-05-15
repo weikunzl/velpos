@@ -179,10 +179,9 @@ class TeamCoordinatorService:
 
         # Create worker session
         role_label = member.get("role_label", target_role)
+        worker_model = config.get("model", "claude-sonnet-4-6")
         worker_session = Session.create(
-            model=target_project.team_config.get("model", "claude-sonnet-4-6")
-            if target_project.project_type == "team"
-            else "claude-sonnet-4-6",
+            model=worker_model,
             project_id=target_project_id,
             project_dir=target_project.dir_path,
             team_task_id=task.task_id,
@@ -245,7 +244,7 @@ class TeamCoordinatorService:
         try:
             result_text, result_data = await self._execute_worker(
                 worker_session_id=worker_session_id,
-                model="claude-sonnet-4-6",
+                model=worker_model,
                 prompt=worker_prompt,
                 cwd=target_project.dir_path,
                 mcp_servers=worker_mcp,
@@ -597,7 +596,11 @@ class TeamCoordinatorService:
             if task.worker_session_id:
                 worker = await self._session_repo.find_by_id(task.worker_session_id)
                 if worker:
-                    await self._session_repo.remove(worker)
+                    try:
+                        await self._gateway.disconnect(task.worker_session_id)
+                    except Exception:
+                        pass
+                    await self._session_repo.remove(task.worker_session_id)
                     self._gateway.cleanup_session(task.worker_session_id)
                     deleted_ids.append(task.worker_session_id)
             await self._task_repo.remove(task.task_id)

@@ -51,7 +51,7 @@ function formatTime(ts) {
             {{ n.type === 'auth_required' ? 'Waiting for authorization' : 'Query completed' }}
           </div>
           <div class="notification-meta">
-            <span class="session-id">{{ n.sessionId.slice(0, 8) }}</span>
+            <span class="session-id">{{ (n.sessionId || '').slice(0, 8) }}</span>
             <span class="session-name">{{ n.sessionName }}</span>
             <span v-if="n.projectName" class="project-name">{{ n.projectName }}</span>
           </div>

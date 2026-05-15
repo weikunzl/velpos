@@ -2,6 +2,7 @@
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { getGitConfig, setGitConfig, listSshKeys, generateSshKey } from '../api/gitApi'
 import { useDialogManager } from '@shared/lib/useDialogManager'
+import { useTimeout } from '@shared/lib/useTimeout'
 
 const props = defineProps({
   visible: {
@@ -43,6 +44,7 @@ const showGenForm = ref(false)
 const genKeyType = ref('ed25519')
 const genComment = ref('')
 const copiedKey = ref('')
+const { set: setTimer } = useTimeout()
 
 async function loadData() {
   loading.value = true
@@ -72,7 +74,7 @@ async function handleSaveConfig() {
     userName.value = result.user_name
     userEmail.value = result.user_email
     configSaved.value = true
-    setTimeout(() => { configSaved.value = false }, 2000)
+    setTimer(() => { configSaved.value = false }, 2000)
   } catch (e) {
     error.value = e.message || 'Failed to save git config'
   } finally {
@@ -101,7 +103,7 @@ async function copyPublicKey(publicKey, keyName) {
   try {
     await navigator.clipboard.writeText(publicKey)
     copiedKey.value = keyName
-    setTimeout(() => { copiedKey.value = '' }, 2000)
+    setTimer(() => { copiedKey.value = '' }, 2000)
   } catch {
     // Fallback for non-HTTPS
     const ta = document.createElement('textarea')
@@ -111,7 +113,7 @@ async function copyPublicKey(publicKey, keyName) {
     document.execCommand('copy')
     document.body.removeChild(ta)
     copiedKey.value = keyName
-    setTimeout(() => { copiedKey.value = '' }, 2000)
+    setTimer(() => { copiedKey.value = '' }, 2000)
   }
 }
 

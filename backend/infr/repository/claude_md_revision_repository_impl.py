@@ -131,10 +131,3 @@ class ClaudeMdRevisionRepositoryImpl(ClaudeMdRevisionRepository):
             rejected_time=model.rejected_time,
             reject_reason=model.reject_reason,
         )
-
-    @staticmethod
-    def _load_payload(payload_json: str) -> dict[str, Any]:
-        try:
-            return json.loads(payload_json) if payload_json else {}
-        except (json.JSONDecodeError, TypeError):
-            return {}

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.scheduler.model.scheduled_task import ScheduledTask, ScheduledTaskRun
@@ -63,6 +63,9 @@ class ScheduledTaskRepositoryImpl(ScheduledTaskRepository):
         model = result.scalar_one_or_none()
         if model is None:
             return False
+        await self._session.execute(
+            delete(ScheduledTaskRunModel).where(ScheduledTaskRunModel.task_id == task_id)
+        )
         await self._session.delete(model)
         await self._session.flush()
         return True

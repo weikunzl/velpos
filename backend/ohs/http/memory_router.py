@@ -398,11 +398,11 @@ async def read_memory_file(filename: str, project_dir: str = Query(...)):
         return ApiResponse.fail(code=-1, message="Memory directory not found")
 
     file_path = mem_dir / filename
-    if not file_path.exists() or not file_path.is_file():
-        return ApiResponse.fail(code=-1, message="File not found")
-
     if not file_path.resolve().is_relative_to(mem_dir.resolve()):
         return ApiResponse.fail(code=-1, message="Invalid filename")
+
+    if not file_path.exists() or not file_path.is_file():
+        return ApiResponse.fail(code=-1, message="File not found")
 
     content = file_path.read_text(encoding="utf-8")
     return ApiResponse.success(data={"name": filename, "content": content})
@@ -448,11 +448,11 @@ async def delete_memory_file(filename: str, project_dir: str = Query(...)):
         return ApiResponse.fail(code=-1, message="Memory directory not found")
 
     file_path = mem_dir / filename
-    if not file_path.exists():
-        return ApiResponse.fail(code=-1, message="File not found")
-
     if not file_path.resolve().is_relative_to(mem_dir.resolve()):
         return ApiResponse.fail(code=-1, message="Invalid filename")
+
+    if not file_path.exists():
+        return ApiResponse.fail(code=-1, message="File not found")
 
     file_path.unlink()
     logger.info("Memory file deleted: %s", file_path)

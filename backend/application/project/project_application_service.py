@@ -266,10 +266,11 @@ class ProjectApplicationService:
                     await svc.delete_session(session.session_id)
                 except Exception:
                     logger.warning(
-                        "Failed to delete session %s during project cascade, removing directly",
+                        "Failed to delete session %s during project cascade, attempting partial cleanup",
                         session.session_id,
                         exc_info=True,
                     )
+                    await svc.force_cleanup(session.session_id)
                     await self._session_repository.remove(session.session_id)
         finally:
             # Commit and close the standalone DB session created by the factory

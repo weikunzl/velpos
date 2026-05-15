@@ -2,6 +2,7 @@
 import { ref, computed, reactive, watch, nextTick, onBeforeUnmount, onMounted } from 'vue'
 import { useProject } from '@entities/project'
 import { PINNED_PROJECTS_KEY, PINNED_SESSIONS_KEY, compareSessions, loadPinnedIds, savePinnedIds, splitPinnedProjects, togglePinnedId } from '@shared/lib/pinning'
+import { useTimeout } from '@shared/lib/useTimeout'
 import SessionListItem from './SessionListItem.vue'
 import CreateSessionDialog from './CreateSessionDialog.vue'
 import CreateTeamDialog from '@features/agent-teams/ui/CreateTeamDialog.vue'
@@ -139,24 +140,26 @@ function confirmBatchDelete() {
 
 // Delete project confirmation state — two-option menu
 const deletingProject = ref(null)
-let deleteProjectTimer = null
+const { set: setTimer, clear: clearDelTimer } = useTimeout()
+let deleteProjectTimerId = null
 
 function requestDeleteProject(projectId) {
   deletingProject.value = projectId
-  clearTimeout(deleteProjectTimer)
-  deleteProjectTimer = setTimeout(() => {
+  if (deleteProjectTimerId) clearDelTimer(deleteProjectTimerId)
+  deleteProjectTimerId = setTimer(() => {
     deletingProject.value = null
+    deleteProjectTimerId = null
   }, 5000)
 }
 
 function confirmDeleteProject(projectId) {
-  clearTimeout(deleteProjectTimer)
+  if (deleteProjectTimerId) { clearDelTimer(deleteProjectTimerId); deleteProjectTimerId = null }
   deletingProject.value = null
   emit('delete-project', projectId)
 }
 
 function enterProjectSessionSelect(projectId) {
-  clearTimeout(deleteProjectTimer)
+  if (deleteProjectTimerId) { clearDelTimer(deleteProjectTimerId); deleteProjectTimerId = null }
   deletingProject.value = null
   // Enter selection mode with this project's sessions pre-scoped
   selectionMode.value = true
@@ -168,14 +171,16 @@ function enterProjectSessionSelect(projectId) {
 }
 
 function cancelDeleteProject() {
-  clearTimeout(deleteProjectTimer)
+  if (deleteProjectTimerId) { clearDelTimer(deleteProjectTimerId); deleteProjectTimerId = null }
   deletingProject.value = null
 }
 
 // Collapse state: stores project IDs of collapsed groups
-const collapsedGroups = ref(new Set(
-  JSON.parse(localStorage.getItem(COLLAPSED_KEY) || '[]')
-))
+function loadCollapsed() {
+  try { return JSON.parse(localStorage.getItem(COLLAPSED_KEY) || '[]') }
+  catch { return [] }
+}
+const collapsedGroups = ref(new Set(loadCollapsed()))
 
 function toggleGroup(id) {
   const next = new Set(collapsedGroups.value)
@@ -398,10 +403,6 @@ function scrollToSession(sessionId) {
   }
 }
 
-onBeforeUnmount(() => {
-  if (deleteProjectTimer) clearTimeout(deleteProjectTimer)
-})
-
 // 监听全局session切换事件，自动滚动到目标session
 onMounted(() => {
   window.addEventListener('vp-scroll-to-session', handleScrollToSessionEvent)
@@ -605,7 +606,7 @@ defineExpose({ scrollToSession })
           <div
               class="group-content"
               :class="{ collapsed: isGroupCollapsed(group.id) }"
-              :ref="el => { if (el) groupContentRefs[group.id] = el }"
+              :ref="el => { if (el) groupContentRefs[group.id] = el; else delete groupContentRefs[group.id] }"
             >
             <SessionListItem
               v-for="session in group.sessions"

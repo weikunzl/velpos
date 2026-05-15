@@ -66,7 +66,6 @@ async function triggerLoadMore() {
   const prevScrollHeight = el.scrollHeight
   emit('load-more')
   await nextTick()
-  await new Promise(resolve => requestAnimationFrame(resolve))
   const newScrollHeight = el.scrollHeight
   el.scrollTop += newScrollHeight - prevScrollHeight
   loadingMore.value = false

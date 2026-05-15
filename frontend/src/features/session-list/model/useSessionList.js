@@ -157,6 +157,7 @@ export function useSessionList() {
       await deleteSession(sessionId, { cascade: isTeamCoordinator })
     }
     removeSession(sessionId)
+    removeState(sessionId)
 
     if (currentSessionId.value === sessionId) {
       const first = sessions.value.find(s => s.source !== 'claude-code')
@@ -164,7 +165,6 @@ export function useSessionList() {
         switchSession(first.session_id)
       } else {
         setCurrentSessionId(null)
-        removeState(sessionId)
         localStorage.removeItem(LAST_SESSION_ID_KEY)
       }
     }
@@ -202,12 +202,13 @@ export function useSessionList() {
 
     // Handle current session being deleted
     if (sessionIds.includes(currentSessionId.value)) {
+      const deletedId = currentSessionId.value
       const remaining = sessions.value.find(s => s.source !== 'claude-code')
       if (remaining) {
         switchSession(remaining.session_id)
       } else {
         setCurrentSessionId(null)
-        removeState(currentSessionId.value)
+        removeState(deletedId)
         localStorage.removeItem(LAST_SESSION_ID_KEY)
       }
     }

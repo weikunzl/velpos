@@ -211,7 +211,10 @@ class TeamTask:
         self._result_data = result_data or {}
         self._status = TeamTaskStatus.COMPLETED
         self._completed_at = datetime.now()
-        self._duration_ms = duration_ms
+        if duration_ms:
+            self._duration_ms = duration_ms
+        else:
+            self._duration_ms = int((self._completed_at - self._created_at).total_seconds() * 1000)
         self._cost_usd = cost_usd
 
     def fail(self, error_message: str) -> None:
@@ -220,6 +223,7 @@ class TeamTask:
         self._error_message = error_message
         self._status = TeamTaskStatus.FAILED
         self._completed_at = datetime.now()
+        self._duration_ms = int((self._completed_at - self._created_at).total_seconds() * 1000)
 
     def cancel(self) -> None:
         if self._status in (TeamTaskStatus.COMPLETED, TeamTaskStatus.FAILED, TeamTaskStatus.CANCELLED):
