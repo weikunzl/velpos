@@ -1,5 +1,4 @@
 <script setup>
-import { inject } from 'vue'
 import { useHotkeyHint } from '@shared/lib/useHotkeyHint'
 
 defineProps({

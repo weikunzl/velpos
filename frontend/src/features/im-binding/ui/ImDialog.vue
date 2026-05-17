@@ -1,10 +1,11 @@
 <script setup>
-import { ref, watch, onMounted, onBeforeUnmount, nextTick, computed } from 'vue'
+import { ref, watch, nextTick, computed } from 'vue'
 import QRCode from 'qrcode'
 import { useImBinding } from '../model/useImBinding'
 import ChannelPicker from './ChannelPicker.vue'
 import ChannelInitDialog from './ChannelInitDialog.vue'
 import PromptBinder from './PromptBinder.vue'
+import { useEscapeToClose } from '@shared/lib/useDialogManager'
 
 const props = defineProps({
   visible: {
@@ -22,6 +23,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'prompt', 'navigate-session'])
+
+useEscapeToClose(() => props.visible, () => emit('close'))
 
 function scheduleClose() {
   setTimeout(() => emit('close'), 600)
@@ -231,13 +234,6 @@ function handleClose() {
 function handleOverlayClick(e) {
   if (e.target === e.currentTarget) handleClose()
 }
-
-function handleKeydown(e) {
-  if (e.key === 'Escape' && props.visible) handleClose()
-}
-
-onMounted(() => document.addEventListener('keydown', handleKeydown))
-onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
 </script>
 
 <template>

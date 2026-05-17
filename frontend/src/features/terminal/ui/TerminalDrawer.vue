@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import { useDialogManager } from '@shared/lib/useDialogManager'
+import { useDialogManager, useVisibleProxy, useEscapeToClose } from '@shared/lib/useDialogManager'
 
 const props = defineProps({
   visible: { type: Boolean, required: true },
@@ -13,17 +13,9 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'height-change'])
 
-const visibleWrapper = {
-  get value() {
-    return props.visible
-  },
-  set value(newValue) {
-    if (!newValue) emit('close')
-  }
-}
-
 const { useDialog } = useDialogManager()
-useDialog('terminal', visibleWrapper)
+useDialog('terminal', useVisibleProxy(props, emit))
+useEscapeToClose(() => props.visible, () => emit('close'))
 
 const drawerHeight = ref(parseInt(localStorage.getItem('pf_terminal_height')) || 360)
 const tabs = ref([createTab(1)])
@@ -242,10 +234,6 @@ function emitHeight() {
   emit('height-change', props.visible ? drawerHeight.value : 0)
 }
 
-function handleKeydown(e) {
-  if (e.key === 'Escape' && props.visible) emit('close')
-}
-
 watch(() => props.visible, (val) => {
   emitHeight()
   if (val) ensureActiveTerminal()
@@ -277,13 +265,11 @@ watch(drawerHeight, () => {
 })
 
 onMounted(() => {
-  document.addEventListener('keydown', handleKeydown)
   emitHeight()
   if (props.visible) ensureActiveTerminal()
 })
 
 onBeforeUnmount(() => {
-  document.removeEventListener('keydown', handleKeydown)
   emit('height-change', 0)
   if (resizeOnMove) {
     window.removeEventListener('mousemove', resizeOnMove)

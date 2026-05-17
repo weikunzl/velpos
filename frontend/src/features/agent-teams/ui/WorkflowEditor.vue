@@ -13,7 +13,6 @@ const emit = defineEmits(['reorder'])
 
 const NODE_W = 140
 const NODE_H = 56
-const GAP_X = 40
 const GAP_Y = 24
 const PAD = 20
 

@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any
 
 from domain.session.model.message import Message
-from domain.session.model.message_type import MessageType
 from domain.session.model.session import Session
 from domain.session.model.session_branch import SessionBranch
 from domain.session.model.session_snapshot import SessionSnapshot

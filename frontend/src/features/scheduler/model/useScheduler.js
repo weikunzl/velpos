@@ -22,61 +22,35 @@ export function useScheduler() {
     }
   }
 
-  async function saveNewSchedule(payload) {
+  async function mutate(fn, fallbackMsg) {
     saving.value = true
     error.value = ''
     try {
-      await createSchedule(payload)
+      await fn()
       await loadSchedules(activeProjectId.value)
       window.dispatchEvent(new CustomEvent('vp-schedules-changed'))
     } catch (e) {
-      error.value = e.message || 'Failed to create schedule'
+      error.value = e.message || fallbackMsg
     } finally {
       saving.value = false
     }
   }
 
-  async function toggleSchedule(task) {
+  function saveNewSchedule(payload) {
+    return mutate(() => createSchedule(payload), 'Failed to create schedule')
+  }
+
+  function toggleSchedule(task) {
     if (!task) return
-    saving.value = true
-    error.value = ''
-    try {
-      await updateSchedule(task.id, { enabled: !task.enabled })
-      await loadSchedules(activeProjectId.value)
-      window.dispatchEvent(new CustomEvent('vp-schedules-changed'))
-    } catch (e) {
-      error.value = e.message || 'Failed to update schedule'
-    } finally {
-      saving.value = false
-    }
+    return mutate(() => updateSchedule(task.id, { enabled: !task.enabled }), 'Failed to update schedule')
   }
 
-  async function removeSchedule(taskId) {
-    saving.value = true
-    error.value = ''
-    try {
-      await deleteSchedule(taskId)
-      await loadSchedules(activeProjectId.value)
-      window.dispatchEvent(new CustomEvent('vp-schedules-changed'))
-    } catch (e) {
-      error.value = e.message || 'Failed to delete schedule'
-    } finally {
-      saving.value = false
-    }
+  function removeSchedule(taskId) {
+    return mutate(() => deleteSchedule(taskId), 'Failed to delete schedule')
   }
 
-  async function runNow(taskId) {
-    saving.value = true
-    error.value = ''
-    try {
-      await runScheduleNow(taskId)
-      await loadSchedules(activeProjectId.value)
-      window.dispatchEvent(new CustomEvent('vp-schedules-changed'))
-    } catch (e) {
-      error.value = e.message || 'Failed to run schedule'
-    } finally {
-      saving.value = false
-    }
+  function runNow(taskId) {
+    return mutate(() => runScheduleNow(taskId), 'Failed to run schedule')
   }
 
   return {

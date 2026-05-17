@@ -16,7 +16,6 @@ from application.project.command.create_project_command import CreateProjectComm
 from application.project.command.init_plugin_command import InitPluginCommand
 from application.project.command.reorder_projects_command import ReorderProjectsCommand
 from application.team_task.command.create_team_project_command import CreateTeamProjectCommand
-from application.session.command.create_session_command import CreateSessionCommand
 from application.session.command.run_query_command import RunQueryCommand
 from domain.session.acl.connection_manager import ConnectionManager
 from application.session.session_application_service import SessionApplicationService

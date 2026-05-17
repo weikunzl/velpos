@@ -21,6 +21,6 @@ class ConnectionManager(ABC):
         ...
 
     @abstractmethod
-    def has_connections(self, session_id: str) -> bool:
+    async def has_connections(self, session_id: str) -> bool:
         """Check if a session has any active WebSocket connections."""
         ...

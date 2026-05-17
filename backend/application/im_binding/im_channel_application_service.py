@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from domain.shared.async_utils import safe_create_task
 from typing import Any
 
-from domain.im_binding.acl.im_channel_adapter import BindResult, ImChannelAdapter, InitResult
+from domain.im_binding.acl.im_channel_adapter import ImChannelAdapter, InitResult
 from application.session.command.run_query_command import RunQueryCommand
 from domain.session.acl.connection_manager import ConnectionManager
 from application.session.session_application_service import SessionApplicationService

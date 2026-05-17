@@ -10,7 +10,7 @@ import json
 import logging
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from domain.im_binding.acl.im_channel_adapter import (
     BindResult,
@@ -245,7 +245,7 @@ class LarkAdapter(ImChannelAdapter):
 
         # Stop existing listener for this specific channel if any
         with self._lock:
-            existing = self._connections.get(channel_id)
+            existing = self._connections.pop(channel_id, None)
         if existing and existing.thread and existing.thread.is_alive():
             logger.info("[Lark-adapter] Stopping existing WS for channel=%s before restart", channel_id)
             await self._stop_connection(existing)
@@ -616,7 +616,15 @@ class LarkAdapter(ImChannelAdapter):
                     conn.on_message(message_id, content, sender_id, chat_id),
                     conn.main_loop,
                 )
-                logger.info("[Lark-adapter] Dispatched to main loop: channel=%s msg_id=%s", conn.channel_id, message_id)
+                future.add_done_callback(
+                    lambda f, cid=conn.channel_id, mid=message_id: (
+                        logger.error(
+                            "[Lark-adapter] on_message callback failed: channel=%s msg_id=%s",
+                            cid, mid, exc_info=f.exception(),
+                        )
+                        if not f.cancelled() and f.exception() else None
+                    )
+                )
             else:
                 logger.error(
                     "[Lark-adapter] Cannot dispatch: on_message=%s main_loop=%s channel=%s",

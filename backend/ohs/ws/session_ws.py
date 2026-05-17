@@ -111,7 +111,7 @@ async def global_events_endpoint(
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
-        manager.disconnect_global(websocket)
+        await manager.disconnect_global(websocket)
 
 
 @router.websocket("/ws/{session_id}")
@@ -411,9 +411,9 @@ async def websocket_endpoint(
     except Exception:
         logger.exception("websocket_error", extra={"session_id": session_id})
     finally:
-        manager.disconnect(websocket, session_id)
+        await manager.disconnect(websocket, session_id)
         with contextlib.suppress(Exception):
             await service.rollback()
         # Schedule idle cleanup when last WS client disconnects
-        if not manager.has_connections(session_id):
+        if not await manager.has_connections(session_id):
             gateway.schedule_idle_disconnect(session_id)

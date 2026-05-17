@@ -1,6 +1,7 @@
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { usePluginManager } from '../model/usePluginManager'
+import { useEscapeToClose } from '@shared/lib/useDialogManager'
 
 function formatRelativeTime(isoStr) {
   if (!isoStr) return ''
@@ -28,6 +29,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close'])
+
+useEscapeToClose(() => props.visible, () => emit('close'))
 
 const {
   plugins,
@@ -83,20 +86,6 @@ function handleOverlayClick(e) {
     handleClose()
   }
 }
-
-function handleKeydown(e) {
-  if (e.key === 'Escape' && props.visible) {
-    handleClose()
-  }
-}
-
-onMounted(() => {
-  document.addEventListener('keydown', handleKeydown)
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener('keydown', handleKeydown)
-})
 </script>
 
 <template>

@@ -3,8 +3,7 @@ import { ref, watch, computed } from 'vue'
 import { useSession } from '@entities/session'
 import { useImBinding } from '@features/im-binding'
 import { useScheduler } from '../model/useScheduler'
-import { useDialogManager } from '@shared/lib/useDialogManager'
-import { useGlobalHotkeys } from '@shared/lib/useGlobalHotkeys'
+import { useDialogManager, useVisibleProxy, useEscapeToClose } from '@shared/lib/useDialogManager'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -13,23 +12,9 @@ const props = defineProps({
 })
 const emit = defineEmits(['close'])
 
-const visibleWrapper = {
-  get value() { return props.visible },
-  set value(v) { if (!v) emit('close') },
-}
-useDialogManager().useDialog('scheduler', visibleWrapper)
+useDialogManager().useDialog('scheduler', useVisibleProxy(props, emit))
 
-useGlobalHotkeys({
-  keys: 'Escape',
-  handler: () => {
-    if (props.visible) {
-      emit('close')
-      return false
-    }
-    return true
-  },
-  priority: 100,
-})
+useEscapeToClose(() => props.visible, () => emit('close'))
 
 const { sessions } = useSession()
 const { availableChannels, fetchChannels } = useImBinding()
@@ -324,9 +309,7 @@ function taskAnchorLabel(task) {
 .schedule-main { min-width: 0; }
 .schedule-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .schedule-title { font-weight: 800; color: var(--text-primary); font-size: 14px; }
-.status-pill, .schedule-anchor { display: inline-flex; align-items: center; border-radius: 999px; font-family: var(--font-mono); }
-.status-pill { padding: 3px 8px; color: var(--green); border: 1px solid color-mix(in srgb, var(--green) 42%, var(--border)); background: var(--green-dim); font-size: 10px; font-weight: 800; }
-.status-pill--paused { color: var(--text-muted); border-color: var(--border); background: var(--bg-tertiary); }
+.schedule-anchor { display: inline-flex; align-items: center; border-radius: 999px; font-family: var(--font-mono); }
 .schedule-anchor { max-width: 100%; margin-top: 9px; font-size: 10px; color: var(--text-muted); border: 1px solid var(--border); padding: 3px 8px; }
 .schedule-anchor--active { color: var(--green); border-color: color-mix(in srgb, var(--green) 45%, var(--border)); background: var(--green-dim); }
 .schedule-meta { color: var(--text-muted); font-size: 11px; margin-top: 4px; }

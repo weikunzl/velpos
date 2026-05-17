@@ -56,19 +56,8 @@ const FIELD_LABELS = {
   bot_token: 'Bot Token',
 }
 
-const STATUS_TEXT = {
-  wait: 'Waiting for scan...',
-  waiting: 'Waiting for scan...',
-  scaned: 'Scanned, confirm on phone',
-  scanned: 'Scanned, confirm on phone',
-}
-
 function fieldLabel(field) {
   return FIELD_LABELS[field] || field
-}
-
-function loginStatusText(status) {
-  return STATUS_TEXT[status] || status
 }
 
 function loginStatusClass(status) {
@@ -371,16 +360,6 @@ const pollStatusText = computed(() => {
   text-align: center;
   line-height: 1.6;
   max-width: 320px;
-}
-
-.login-status {
-  margin-top: 4px;
-}
-
-.status-badge {
-  font-size: 12px;
-  padding: 4px 12px;
-  border-radius: var(--radius-sm);
 }
 
 .status-waiting {

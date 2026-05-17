@@ -1,6 +1,7 @@
 <script setup>
-import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { useAgentManager } from '../model/useAgentManager'
+import { useEscapeToClose } from '@shared/lib/useDialogManager'
 
 const props = defineProps({
   visible: { type: Boolean, required: true },
@@ -10,6 +11,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'update:project'])
+
+useEscapeToClose(() => props.visible, () => emit('close'))
 
 const {
   categories,
@@ -79,14 +82,6 @@ function handleClose() {
 function handleOverlayClick(e) {
   if (e.target === e.currentTarget) handleClose()
 }
-
-function handleKeydown(e) {
-  if (!props.visible) return
-  if (e.key === 'Escape') handleClose()
-}
-
-onMounted(() => document.addEventListener('keydown', handleKeydown))
-onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
 </script>
 
 <template>

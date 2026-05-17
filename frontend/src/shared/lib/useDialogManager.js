@@ -1,4 +1,5 @@
 import { reactive, onUnmounted } from 'vue'
+import { useGlobalHotkeys } from './useGlobalHotkeys'
 
 const dialogs = reactive(new Map())
 
@@ -49,4 +50,25 @@ export function useDialogManager() {
     useDialog,
     dialogs
   }
+}
+
+export function useVisibleProxy(props, emit, event = 'close') {
+  return {
+    get value() { return props.visible },
+    set value(v) { if (!v) emit(event) },
+  }
+}
+
+export function useEscapeToClose(isVisible, close, priority = 100) {
+  useGlobalHotkeys({
+    keys: 'Escape',
+    handler: () => {
+      if (isVisible()) {
+        close()
+        return false
+      }
+      return true
+    },
+    priority,
+  })
 }

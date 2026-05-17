@@ -11,7 +11,7 @@ import asyncio
 import json
 import logging
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -81,6 +81,7 @@ class QqWsClient:
     def __init__(self, api_client: QqApiClient) -> None:
         self._api = api_client
         self._connections: dict[str, _QqConnection] = {}
+        self._lock = asyncio.Lock()
 
     def is_channel_running(self, channel_id: str) -> bool:
         """Check whether a specific channel's WS connection is running."""
@@ -100,28 +101,34 @@ class QqWsClient:
         If a connection already exists for this *channel_id* it is stopped
         first, then a fresh connection is created.
         """
-        # Stop existing connection for this channel if any
-        if channel_id in self._connections:
-            logger.info("[QQ-WS] Stopping existing connection for channel=%s before restart", channel_id)
-            await self.stop(channel_id)
+        async with self._lock:
+            # Stop existing connection for this channel if any
+            if channel_id in self._connections:
+                logger.info("[QQ-WS] Stopping existing connection for channel=%s before restart", channel_id)
+                await self._stop_and_remove(channel_id)
 
-        conn = _QqConnection(
-            channel_id=channel_id,
-            session_id=session_id,
-            app_id=app_id,
-            app_secret=app_secret,
-            on_message=on_message,
-            running=True,
-        )
-        self._connections[channel_id] = conn
-        conn.task = safe_create_task(
-            self._run_loop(conn),
-            name=f"qq-ws-{channel_id[:8]}",
-        )
-        logger.info("[QQ-WS] Client started for channel=%s session=%s", channel_id, session_id)
+            conn = _QqConnection(
+                channel_id=channel_id,
+                session_id=session_id,
+                app_id=app_id,
+                app_secret=app_secret,
+                on_message=on_message,
+                running=True,
+            )
+            self._connections[channel_id] = conn
+            conn.task = safe_create_task(
+                self._run_loop(conn),
+                name=f"qq-ws-{channel_id[:8]}",
+            )
+            logger.info("[QQ-WS] Client started for channel=%s session=%s", channel_id, session_id)
 
     async def stop(self, channel_id: str) -> None:
         """Stop a specific channel's WebSocket connection and clean up."""
+        async with self._lock:
+            await self._stop_and_remove(channel_id)
+
+    async def _stop_and_remove(self, channel_id: str) -> None:
+        """Stop and remove a connection — caller must hold ``_lock``."""
         conn = self._connections.pop(channel_id, None)
         if conn is None:
             return
@@ -130,10 +137,11 @@ class QqWsClient:
 
     async def stop_all(self) -> None:
         """Stop all active connections — used during shutdown."""
-        channel_ids = list(self._connections.keys())
-        for cid in channel_ids:
-            await self.stop(cid)
-        logger.info("[QQ-WS] All connections stopped (%d)", len(channel_ids))
+        async with self._lock:
+            channel_ids = list(self._connections.keys())
+            for cid in channel_ids:
+                await self._stop_and_remove(cid)
+            logger.info("[QQ-WS] All connections stopped (%d)", len(channel_ids))
 
     # ── Internal helpers ──
 

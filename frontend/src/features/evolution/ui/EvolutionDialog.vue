@@ -1,8 +1,7 @@
 <script setup>
 import { ref, watch, computed } from 'vue'
 import { useEvolution } from '../model/useEvolution'
-import { useDialogManager } from '@shared/lib/useDialogManager'
-import { useGlobalHotkeys } from '@shared/lib/useGlobalHotkeys'
+import { useDialogManager, useVisibleProxy, useEscapeToClose } from '@shared/lib/useDialogManager'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -13,11 +12,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'draft-created'])
 
 const { useDialog } = useDialogManager()
-const visibleWrapper = {
-  get value() { return props.visible },
-  set value(v) { if (!v) emit('close') },
-}
-useDialog('evolution', visibleWrapper)
+useDialog('evolution', useVisibleProxy(props, emit))
 
 const target = ref('claude')
 const rulePath = ref('')
@@ -52,17 +47,7 @@ watch(() => props.visible, (v) => {
   }
 })
 
-useGlobalHotkeys({
-  keys: 'Escape',
-  handler: () => {
-    if (props.visible) {
-      emit('close')
-      return false
-    }
-    return true
-  },
-  priority: 100,
-})
+useEscapeToClose(() => props.visible, () => emit('close'))
 
 async function handleCreateDraft() {
   if (target.value === 'rule') {

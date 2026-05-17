@@ -1,7 +1,7 @@
 <script setup>
-import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, watch } from 'vue'
 import { getGitConfig, setGitConfig, listSshKeys, generateSshKey } from '../api/gitApi'
-import { useDialogManager } from '@shared/lib/useDialogManager'
+import { useDialogManager, useVisibleProxy, useEscapeToClose } from '@shared/lib/useDialogManager'
 import { useTimeout } from '@shared/lib/useTimeout'
 
 const props = defineProps({
@@ -13,20 +13,9 @@ const props = defineProps({
 
 const emit = defineEmits(['close'])
 
-// 创建包装对象来管理可见性
-const visibleWrapper = {
-  get value() {
-    return props.visible
-  },
-  set value(newValue) {
-    if (!newValue) {
-      emit('close')
-    }
-  }
-}
-
 const { useDialog } = useDialogManager()
-useDialog('git-manager', visibleWrapper)
+useDialog('git-manager', useVisibleProxy(props, emit))
+useEscapeToClose(() => props.visible, () => emit('close'))
 
 const loading = ref(false)
 const saving = ref(false)
@@ -123,25 +112,11 @@ function handleOverlayClick(e) {
   }
 }
 
-function handleKeydown(e) {
-  if (e.key === 'Escape' && props.visible) {
-    emit('close')
-  }
-}
-
 watch(() => props.visible, (val) => {
   if (val) {
     loadData()
     showGenForm.value = false
   }
-})
-
-onMounted(() => {
-  document.addEventListener('keydown', handleKeydown)
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener('keydown', handleKeydown)
 })
 </script>
 

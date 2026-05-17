@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, nextTick, onBeforeUnmount } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import { useTimeout } from '@shared/lib/useTimeout'
 
 const props = defineProps({
@@ -65,22 +65,8 @@ const displayName = computed(() => {
   return props.session.name || getShortId(props.session.session_id)
 })
 
-const modelShortName = computed(() => {
-  const m = props.session.model || ''
-  if (m.includes('sonnet')) return 'Sonnet'
-  if (m.includes('opus')) return 'Opus'
-  if (m.includes('haiku')) return 'Haiku'
-  // Take last segment after last hyphen for unknown models
-  const parts = m.split('-')
-  return parts.length > 1 ? parts.slice(-2).join('-') : m
-})
-
 const isActive = computed(() => {
   return props.session.status === 'running'
-})
-
-const statusLabel = computed(() => {
-  return isActive.value ? 'Active' : 'Inactive'
 })
 
 const formattedTime = computed(() => {
@@ -98,12 +84,6 @@ const formattedTime = computed(() => {
   if (diffDay < 7) return `${diffDay}d ago`
   return d.toLocaleDateString()
 })
-
-function getStatusClass(status) {
-  if (status === 'running') return 'status-running'
-  if (status === 'error') return 'status-error'
-  return 'status-idle'
-}
 
 const statusDotClass = computed(() => {
   if (isClaudeCode.value) return 'status-claude'
@@ -352,17 +332,6 @@ async function copySessionId() {
   background: var(--purple, #a78bfa);
 }
 
-.source-tag {
-  font-size: 9px;
-  font-weight: 600;
-  padding: 0 4px;
-  border-radius: 3px;
-  background: var(--purple-dim);
-  color: var(--purple);
-  flex-shrink: 0;
-  letter-spacing: 0.5px;
-}
-
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
@@ -484,33 +453,6 @@ async function copySessionId() {
   color: var(--text-muted);
 }
 
-.session-status {
-  font-size: 10px;
-  padding: 1px 5px;
-  border-radius: 6px;
-  background: var(--bg-tertiary);
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-.session-model {
-  font-size: 10px;
-  font-family: var(--font-mono);
-  padding: 1px 5px;
-  border-radius: 6px;
-  background: var(--accent-dim);
-  color: var(--accent);
-  white-space: nowrap;
-  max-width: 70px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.session-status.active {
-  background: var(--green-dim);
-  color: var(--green);
-}
-
 .session-time {
   white-space: nowrap;
 }
@@ -526,19 +468,6 @@ async function copySessionId() {
   background: var(--blue-dim, rgba(59, 130, 246, 0.1));
   color: var(--blue, #3b82f6);
   white-space: nowrap;
-}
-
-.session-branch {
-  font-size: 10px;
-  font-family: var(--font-mono);
-  padding: 1px 5px;
-  border-radius: 6px;
-  background: var(--bg-tertiary);
-  color: var(--text-muted);
-  white-space: nowrap;
-  max-width: 100px;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* Delete confirmation */

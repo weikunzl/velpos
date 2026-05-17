@@ -3,8 +3,7 @@ import { watch, computed, ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { configuredMarked } from '@features/message-display'
 import { listWorkspaceFileHistory, readWorkspaceFileAtRef } from '@entities/project/api/projectApi'
 import { useMemoryManager } from '../model/useMemoryManager'
-import { useDialogManager } from '@shared/lib/useDialogManager'
-import { useGlobalHotkeys } from '@shared/lib/useGlobalHotkeys'
+import { useDialogManager, useVisibleProxy, useEscapeToClose } from '@shared/lib/useDialogManager'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -14,27 +13,9 @@ const props = defineProps({
 const emit = defineEmits(['close', 'evolve'])
 
 const { useDialog } = useDialogManager()
-const visibleWrapper = {
-  get value() {
-    return props.visible
-  },
-  set value(newValue) {
-    if (!newValue) emit('close')
-  }
-}
-useDialog('memory-manager', visibleWrapper)
+useDialog('memory-manager', useVisibleProxy(props, emit))
 
-useGlobalHotkeys({
-  keys: 'Escape',
-  handler: () => {
-    if (props.visible) {
-      emit('close')
-      return false
-    }
-    return true
-  },
-  priority: 100
-})
+useEscapeToClose(() => props.visible, () => emit('close'))
 
 const activeTab = ref('claude')
 const claudeCompareRevisionId = ref('')

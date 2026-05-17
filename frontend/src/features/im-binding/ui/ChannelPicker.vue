@@ -43,17 +43,6 @@ function getIcon(icon) {
   return ICON_MAP[icon] || ICON_MAP.openim
 }
 
-const STATUS_LABELS = {
-  ready: 'Ready',
-  not_initialized: 'Setup Required',
-  initializing: 'Initializing...',
-  error: 'Error',
-}
-
-function statusLabel(status) {
-  return STATUS_LABELS[status] || status
-}
-
 const currentChannel = computed(() => {
   if (!selectedType.value) return null
   return props.channels.find(ch => ch.channel_type === selectedType.value) || null

@@ -1,6 +1,7 @@
 <script setup>
-import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import { pickProjectDirectory } from '@entities/project'
+import { useEscapeToClose } from '@shared/lib/useDialogManager'
 
 const props = defineProps({
   visible: {
@@ -10,6 +11,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['confirm', 'cancel'])
+
+useEscapeToClose(() => props.visible, () => emit('cancel'))
 
 const mode = ref('github')
 const projectName = ref('')
@@ -131,21 +134,6 @@ function handleOverlayClick(e) {
     handleCancel()
   }
 }
-
-function handleKeydown(e) {
-  if (!props.visible) return
-  if (e.key === 'Escape') {
-    handleCancel()
-  }
-}
-
-onMounted(() => {
-  document.addEventListener('keydown', handleKeydown)
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener('keydown', handleKeydown)
-})
 </script>
 
 <template>

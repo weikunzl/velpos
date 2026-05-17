@@ -1,15 +1,18 @@
 <script setup>
-import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
 import { useProject } from '@entities/project/model/useProject'
 import { pickProjectDirectory } from '@entities/project'
 import CustomSelect from '@shared/ui/CustomSelect.vue'
 import { createTeamProject, listTeamTemplates } from '../api/teamApi'
+import { useEscapeToClose } from '@shared/lib/useDialogManager'
 
 const props = defineProps({
   visible: { type: Boolean, required: true },
 })
 
 const emit = defineEmits(['created', 'cancel'])
+
+useEscapeToClose(() => props.visible, () => emit('cancel'))
 
 const { singleAgentProjects } = useProject()
 const isMac = /Mac|iPhone|iPad|iPod/.test(window.navigator.platform || window.navigator.userAgent)
@@ -248,16 +251,9 @@ async function handleCreate() {
 function handleCancel() { emit('cancel') }
 function handleOverlayClick(e) { if (e.target === e.currentTarget) handleCancel() }
 
-function handleKeydown(e) {
-  if (!props.visible) return
-  if (e.key === 'Escape') handleCancel()
-}
-
 onMounted(() => {
-  document.addEventListener('keydown', handleKeydown)
   loadTemplates()
 })
-onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
 </script>
 
 <template>

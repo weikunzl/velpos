@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import collections
 import logging
 import re
 import time
@@ -118,9 +119,9 @@ class ClaudeAgentGateway(ClaudeAgentGatewayPort):
         return str(content)[:500]
 
     @staticmethod
-    def _create_stderr_collector() -> tuple[list[str], Callable[[str], None]]:
+    def _create_stderr_collector() -> tuple[collections.deque[str], Callable[[str], None]]:
         """Create a stderr line collector and its callback."""
-        lines: list[str] = []
+        lines: collections.deque[str] = collections.deque(maxlen=500)
 
         def _on_stderr(line: str) -> None:
             lines.append(line)
@@ -747,7 +748,6 @@ class ClaudeAgentGateway(ClaudeAgentGatewayPort):
         after a process restart).
         """
         import os
-        from claude_agent_sdk import list_sessions as sdk_list_sessions
         from claude_agent_sdk._internal.sessions import (
             _canonicalize_path,
             _find_project_dir,
