@@ -263,6 +263,12 @@ class ClaudeAgentGateway(ClaudeAgentGatewayPort):
                     return
             except Exception:
                 logger.warning("检查IM绑定状态失败: session=%s", session_id, exc_info=True)
+        # Re-check active state before disconnecting (another coroutine may have
+        # called mark_active while we were awaiting the IM-bound check above).
+        if session_id in self._active_sessions:
+            logger.info("空闲断开跳过(查询在等待期间开始): session=%s, 重新调度", session_id)
+            self.schedule_idle_disconnect(session_id)
+            return
         logger.info("空闲断开: session=%s", session_id)
         await self.disconnect(session_id)
 

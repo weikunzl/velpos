@@ -1,5 +1,5 @@
 <script setup>
-const props = defineProps({
+defineProps({
   channelName: {
     type: String,
     default: '',
@@ -84,34 +84,6 @@ const emit = defineEmits(['start', 'back'])
   color: var(--text-secondary);
   line-height: 1.6;
   margin: 0;
-}
-
-.prompt-preview {
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-}
-
-.preview-label {
-  font-size: 10px;
-  color: var(--text-muted);
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--border);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.preview-text {
-  font-size: 12px;
-  color: var(--text-secondary);
-  padding: 10px;
-  margin: 0;
-  white-space: pre-wrap;
-  font-family: var(--font-mono);
-  line-height: 1.5;
-  max-height: 160px;
-  overflow-y: auto;
 }
 
 .warning-hint {

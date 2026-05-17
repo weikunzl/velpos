@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useTaskProgress } from '../model/useTaskProgress'
 import { formatDurationLong as formatDuration } from '@features/message-display'
 
-const emit = defineEmits(['close'])
+defineEmits(['close'])
 
 const {
   allTasks, taskCounts, planTasks, planTaskCounts, hasPlanTasks,

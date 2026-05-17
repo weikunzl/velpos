@@ -66,7 +66,7 @@ async function handleCreateDraft() {
 </script>
 
 <template>
-  <teleport to="body">
+  <Teleport to="body">
     <Transition name="dialog-fade">
       <div v-if="visible" class="evolution-overlay" @click.self="emit('close')">
         <div class="evolution-dialog">
@@ -147,7 +147,7 @@ async function handleCreateDraft() {
         </div>
       </div>
     </Transition>
-  </teleport>
+  </Teleport>
 </template>
 
 <style scoped>

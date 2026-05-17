@@ -1,5 +1,5 @@
 <script setup>
-const props = defineProps({
+defineProps({
   role: { type: String, default: '' },
   label: { type: String, default: '' },
   status: { type: String, default: '' },

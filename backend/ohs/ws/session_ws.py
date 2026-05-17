@@ -169,7 +169,7 @@ async def websocket_endpoint(
 
         # Include effective permission mode so frontend can sync
         session_summary["permission_mode"] = gateway.get_permission_mode(session_id)
-        session_summary["waiting_for_slot"] = service.is_waiting_for_slot(session_id)
+        session_summary["waiting_for_slot"] = await service.is_waiting_for_slot(session_id)
         session_summary["agent_state"] = service.get_agent_state(session_id)
 
         await websocket.send_json({
@@ -196,7 +196,7 @@ async def websocket_endpoint(
                         git_branch=await bg_service.get_current_git_branch(refreshed.project_dir),
                     )
                     refreshed_summary["permission_mode"] = gateway.get_permission_mode(session_id)
-                    refreshed_summary["waiting_for_slot"] = bg_service.is_waiting_for_slot(session_id)
+                    refreshed_summary["waiting_for_slot"] = await bg_service.is_waiting_for_slot(session_id)
                     refreshed_summary["agent_state"] = bg_service.get_agent_state(session_id)
                     await manager.broadcast(session_id, {
                         "event": "status",
@@ -355,7 +355,7 @@ async def websocket_endpoint(
                     current_session,
                     git_branch=await service.get_current_git_branch(current_session.project_dir),
                 )
-                summary["waiting_for_slot"] = service.is_waiting_for_slot(session_id)
+                summary["waiting_for_slot"] = await service.is_waiting_for_slot(session_id)
                 await websocket.send_json({
                     "event": "status",
                     "session": summary,
@@ -371,7 +371,7 @@ async def websocket_endpoint(
                             current_session,
                             git_branch=await service.get_current_git_branch(current_session.project_dir),
                         )
-                        summary["waiting_for_slot"] = service.is_waiting_for_slot(session_id)
+                        summary["waiting_for_slot"] = await service.is_waiting_for_slot(session_id)
                         summary["agent_state"] = service.get_agent_state(session_id)
                         await websocket.send_json({
                             "event": "status",

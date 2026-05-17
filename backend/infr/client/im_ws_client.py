@@ -278,7 +278,8 @@ class ImWsClient(ImWsGateway):
         return False
 
     async def close_all(self) -> None:
-        user_ids = list(self._connections.keys())
+        async with self._lock:
+            user_ids = list(self._connections.keys())
         for im_user_id in user_ids:
             await self.disconnect(im_user_id)
         logger.info("IM WS all connections closed")

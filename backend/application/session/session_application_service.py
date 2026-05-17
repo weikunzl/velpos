@@ -42,6 +42,7 @@ class SessionApplicationService:
     _cancelled_sessions: set[str] = set()
     _queued_messages: dict[str, "RunQueryCommand"] = {}
     _waiting_for_slot: set[str] = set()
+    _queue_guard = asyncio.Lock()
     _query_semaphore: asyncio.Semaphore | None = None
     _query_semaphore_guard = asyncio.Lock()
 
@@ -95,8 +96,9 @@ class SessionApplicationService:
         self._timeline_event_service = timeline_event_service
         self._session_service_factory = session_service_factory
 
-    def is_waiting_for_slot(self, session_id: str) -> bool:
-        return session_id in self._waiting_for_slot
+    async def is_waiting_for_slot(self, session_id: str) -> bool:
+        async with self._queue_guard:
+            return session_id in self._waiting_for_slot
 
     async def submit_query(self, command: RunQueryCommand) -> None:
         self._claude_agent_gateway.mark_active(command.session_id)
@@ -115,7 +117,8 @@ class SessionApplicationService:
                 )
             async with session_lock:
                 if query_semaphore.locked():
-                    self._waiting_for_slot.add(command.session_id)
+                    async with self._queue_guard:
+                        self._waiting_for_slot.add(command.session_id)
                     await self._connection_manager.broadcast(
                         command.session_id,
                         {"event": "resource_waiting", "status": "waiting_slot"},
@@ -126,14 +129,17 @@ class SessionApplicationService:
                         payload={"reason": "concurrency_limit"},
                     )
                 async with query_semaphore:
-                    self._waiting_for_slot.discard(command.session_id)
+                    async with self._queue_guard:
+                        self._waiting_for_slot.discard(command.session_id)
                     await self.run_claude_query(command)
         except asyncio.CancelledError:
-            self._waiting_for_slot.discard(command.session_id)
+            async with self._queue_guard:
+                self._waiting_for_slot.discard(command.session_id)
             self._claude_agent_gateway.mark_idle(command.session_id)
             raise
         except Exception:
-            self._waiting_for_slot.discard(command.session_id)
+            async with self._queue_guard:
+                self._waiting_for_slot.discard(command.session_id)
             self._claude_agent_gateway.mark_idle(command.session_id)
             raise
 
@@ -839,9 +845,10 @@ class SessionApplicationService:
                 self._session_locks.pop(session_id, None)
 
         # Clean up other class-level tracking state
-        self._cancelled_sessions.discard(session_id)
-        self._queued_messages.pop(session_id, None)
-        self._waiting_for_slot.discard(session_id)
+        async with self._queue_guard:
+            self._cancelled_sessions.discard(session_id)
+            self._queued_messages.pop(session_id, None)
+            self._waiting_for_slot.discard(session_id)
 
         removed = await self._session_repository.remove(session_id)
         if not removed:
@@ -1356,7 +1363,8 @@ class SessionApplicationService:
             )
 
             # Execute queued follow-up message if present
-            queued = self._queued_messages.pop(command.session_id, None)
+            async with self._queue_guard:
+                queued = self._queued_messages.pop(command.session_id, None)
             if queued:
                 await self._set_queued_command(command.session_id, None)
                 await self._record_audit_event(
@@ -1705,8 +1713,9 @@ class SessionApplicationService:
         6. Rewinds domain session (removes last user msg + responses).
         7. Broadcasts rewind event with the original prompt.
         """
-        self._cancelled_sessions.add(session_id)
-        self._waiting_for_slot.discard(session_id)
+        async with self._queue_guard:
+            self._cancelled_sessions.add(session_id)
+            self._waiting_for_slot.discard(session_id)
         await self._record_audit_event(session_id, "cancel_requested", actor="user")
         await self._record_timeline_event(
             session_id,
@@ -1807,7 +1816,8 @@ class SessionApplicationService:
                 {"event": "status_change", "status": "idle"},
             )
 
-        self._cancelled_sessions.discard(session_id)
+        async with self._queue_guard:
+            self._cancelled_sessions.discard(session_id)
         await self._set_cancel_requested(session_id, False)
         await self._record_audit_event(
             session_id,
@@ -1889,8 +1899,9 @@ class SessionApplicationService:
 
         Latest-wins: only the most recent queued message per session is kept.
         """
-        previous = self._queued_messages.get(session_id)
-        self._queued_messages[session_id] = command
+        async with self._queue_guard:
+            previous = self._queued_messages.get(session_id)
+            self._queued_messages[session_id] = command
         await self._set_queued_command(session_id, command)
         if previous is not None:
             await self._record_audit_event(
@@ -1912,13 +1923,15 @@ class SessionApplicationService:
 
     async def clear_queued_message(self, session_id: str) -> None:
         """Clear any queued message for a session (e.g. on cancel)."""
-        removed = self._queued_messages.pop(session_id, None)
+        async with self._queue_guard:
+            removed = self._queued_messages.pop(session_id, None)
         await self._set_queued_command(session_id, None)
         if removed:
             logger.info("[session=%s] 已清除排队消息", session_id)
 
-    def has_queued_message(self, session_id: str) -> bool:
-        return session_id in self._queued_messages
+    async def has_queued_message(self, session_id: str) -> bool:
+        async with self._queue_guard:
+            return session_id in self._queued_messages
 
     async def disconnect_session(self, session_id: str) -> None:
         """Disconnect the SDK client for a session."""

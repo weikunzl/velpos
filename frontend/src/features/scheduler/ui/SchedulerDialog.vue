@@ -159,7 +159,7 @@ function taskAnchorLabel(task) {
 </script>
 
 <template>
-  <teleport to="body">
+  <Teleport to="body">
     <Transition name="dialog-fade">
       <div v-if="visible" class="scheduler-overlay" @click.self="emit('close')">
         <div class="scheduler-dialog" role="dialog" aria-modal="true" aria-labelledby="scheduler-title">
@@ -268,7 +268,7 @@ function taskAnchorLabel(task) {
         </div>
       </div>
     </Transition>
-  </teleport>
+  </Teleport>
 </template>
 
 <style scoped>
