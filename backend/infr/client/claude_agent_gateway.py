@@ -791,7 +791,7 @@ class ClaudeAgentGateway(ClaudeAgentGatewayPort):
         raw_models: list[dict[str, Any]] = []
 
         # Reuse any existing client to avoid spawning a new process
-        for client in self._clients.values():
+        for client in list(self._clients.values()):
             try:
                 info = await client.get_server_info()
                 if info and "models" in info:

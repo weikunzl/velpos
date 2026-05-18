@@ -282,7 +282,7 @@ class TeamCoordinatorService:
 
         except asyncio.CancelledError:
             error_msg = "Task cancelled"
-            task.fail(error_msg)
+            task.cancel()
             await self._task_repo.save(task)
 
             if trace_id:
@@ -334,7 +334,7 @@ class TeamCoordinatorService:
             if step_agent_id and self._agent_service:
                 try:
                     tp = await self._project_repo.find_by_id(target_project_id)
-                    if tp:
+                    if tp and tp._agents.get("locked_by_task") == task.task_id:
                         tp.unlock_agent()
                         await self._project_repo.save(tp)
                         await self._agent_service.unload_agent(
@@ -345,7 +345,7 @@ class TeamCoordinatorService:
                             "Unloaded agent %s from project %s (team step role=%s)",
                             step_agent_id, target_project_id, target_role,
                         )
-                except BaseException:
+                except Exception:
                     logger.warning(
                         "Failed to unload agent %s from project %s",
                         step_agent_id, target_project_id,

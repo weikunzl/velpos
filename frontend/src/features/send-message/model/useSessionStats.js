@@ -8,6 +8,7 @@ const DEFAULT_CONTEXT_SIZE = 200000
 const modelContextSizes = ref({})
 const projectUsageSummary = ref(null)
 let usageFetchKey = ''
+let _usageSeq = 0
 let _modelsPromise = null
 
 
@@ -32,7 +33,7 @@ async function ensureModelsFetched() {
 }
 
 export function useSessionStats() {
-  const { session, messages, queryHistory, status } = useSession()
+  const { session, messages, queryHistory } = useSession()
 
   ensureModelsFetched()
 
@@ -42,10 +43,12 @@ export function useSessionStats() {
     const key = `${current.session_id}:${current.project_id || ''}:${current.usage?.input_tokens || 0}:${current.usage?.output_tokens || 0}`
     if (key === usageFetchKey) return
     usageFetchKey = key
+    const seq = ++_usageSeq
     try {
       const projectUsage = await (
         current.project_id ? getProjectUsage(current.project_id, true) : Promise.resolve(null)
       )
+      if (seq !== _usageSeq) return
       projectUsageSummary.value = projectUsage
     } catch {
       // keep previous usage display

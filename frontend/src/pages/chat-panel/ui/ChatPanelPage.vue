@@ -443,6 +443,7 @@ const showBranchMenu = ref(false)
 const branchList = ref([])
 const branchCurrent = ref('')
 const branchLoading = ref(false)
+let _branchSeq = 0
 
 // Sync branch from backend session data
 watch(session, (s) => {
@@ -460,11 +461,14 @@ async function handleBranchClick() {
   showHistory.value = false
   if (showBranchMenu.value && currentProject.value) {
     branchLoading.value = true
+    const seq = ++_branchSeq
     try {
       const res = await getGitBranches(currentProject.value.id)
+      if (seq !== _branchSeq) return
       branchList.value = res.branches || []
       branchCurrent.value = res.current || ''
     } catch {
+      if (seq !== _branchSeq) return
       branchList.value = []
       branchCurrent.value = ''
     } finally {
@@ -660,6 +664,7 @@ const multiSessionCount = ref(2)
 const multiSessionWorktree = ref(false)
 const parallelBranches = ref([])
 const parallelBranchLoading = ref(false)
+let _parallelBranchSeq = 0
 const compareResult = ref(null)
 const showCompareResult = ref(false)
 const convergingBranchId = ref('')
@@ -684,10 +689,13 @@ function messagePreview(message) {
 async function loadParallelBranches() {
   if (!currentSessionId.value) return
   parallelBranchLoading.value = true
+  const seq = ++_parallelBranchSeq
   try {
     const data = await listSessionBranches(currentSessionId.value)
+    if (seq !== _parallelBranchSeq) return
     parallelBranches.value = data.branches || []
   } catch {
+    if (seq !== _parallelBranchSeq) return
     parallelBranches.value = []
   } finally {
     parallelBranchLoading.value = false

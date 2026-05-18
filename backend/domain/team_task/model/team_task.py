@@ -226,6 +226,7 @@ class TeamTask:
             return
         self._status = TeamTaskStatus.CANCELLED
         self._completed_at = datetime.now()
+        self._duration_ms = int((self._completed_at - self._created_at).total_seconds() * 1000)
 
     def wait_for_help(self) -> None:
         if self._status != TeamTaskStatus.RUNNING:

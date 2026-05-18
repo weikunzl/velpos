@@ -16,13 +16,15 @@ class TraceFileManager:
     @classmethod
     async def _get_lock(cls, trace_id: str) -> asyncio.Lock:
         async with cls._locks_guard:
-            if trace_id not in cls._locks:
+            lock = cls._locks.get(trace_id)
+            if lock is None:
                 if len(cls._locks) >= cls._MAX_LOCKS:
                     stale = [k for k, v in cls._locks.items() if not v.locked()]
-                    for k in stale[:len(cls._locks) - cls._MAX_LOCKS + 1]:
+                    for k in stale[:max(len(stale) // 2, 1)]:
                         del cls._locks[k]
-                cls._locks[trace_id] = asyncio.Lock()
-            return cls._locks[trace_id]
+                lock = asyncio.Lock()
+                cls._locks[trace_id] = lock
+            return lock
 
     @classmethod
     async def _release_lock(cls, trace_id: str) -> None:
