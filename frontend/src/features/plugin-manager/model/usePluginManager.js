@@ -21,7 +21,7 @@ export function usePluginManager() {
       if (seq !== _loadSeq) return
       error.value = e.message
     } finally {
-      loading.value = false
+      if (seq === _loadSeq) loading.value = false
     }
   }
 

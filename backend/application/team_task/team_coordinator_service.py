@@ -622,7 +622,7 @@ class TeamCoordinatorService:
                     try:
                         await self._gateway.disconnect(task.worker_session_id)
                     except Exception:
-                        pass
+                        logger.debug("Disconnect failed for worker session=%s", task.worker_session_id, exc_info=True)
                     await self._session_repo.remove(task.worker_session_id)
                     await self._gateway.cleanup_session(task.worker_session_id)
                     deleted_ids.append(task.worker_session_id)

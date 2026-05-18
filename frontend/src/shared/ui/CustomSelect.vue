@@ -43,13 +43,11 @@ function positionMenu() {
   const spaceBelow = window.innerHeight - rect.bottom
   const spaceAbove = rect.top
 
-  let top, origin
+  let top
   if (spaceBelow >= menuHeight || spaceBelow >= spaceAbove) {
     top = rect.bottom + 4
-    origin = 'top'
   } else {
     top = rect.top - menuHeight - 4
-    origin = 'bottom'
   }
 
   menuStyle.value = {

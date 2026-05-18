@@ -44,7 +44,8 @@ class Project:
         return dict(self._agents)
 
     def get_current_agent(self) -> dict | None:
-        return self._agents.get("current")
+        agent = self._agents.get("current")
+        return dict(agent) if agent else None
 
     def load_agent(self, agent_id: str, language: str) -> None:
         locked_by = self._agents.get("locked_by_task")
@@ -158,11 +159,11 @@ class Project:
             _id=id,
             _name=name,
             _dir_path=dir_path,
-            _agents=agents,
-            _plugins=plugins or {},
+            _agents=dict(agents) if agents else {},
+            _plugins=dict(plugins) if plugins else {},
             _sort_order=sort_order,
             _project_type=project_type,
-            _team_config=team_config or {},
+            _team_config=dict(team_config) if team_config else {},
             _active_claude_md_revision_id=active_claude_md_revision_id,
             _claude_md_file_hash=claude_md_file_hash,
             _created_at=created_at or datetime.now(),

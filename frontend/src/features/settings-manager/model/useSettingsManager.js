@@ -37,7 +37,7 @@ export function useSettingsManager() {
       if (seq !== _loadSeq) return
       error.value = err.message || 'Failed to load data'
     } finally {
-      loading.value = false
+      if (seq === _loadSeq) loading.value = false
     }
   }
 

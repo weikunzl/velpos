@@ -202,7 +202,7 @@ class SessionApplicationService:
         try:
             await self._session_repository.close()
         except Exception:
-            pass
+            logger.debug("Failed to close old DB session during refresh", exc_info=True)
         new_db_session = async_session_factory()
         self._session_repository = SessionRepositoryImpl(new_db_session)
 
@@ -823,7 +823,7 @@ class SessionApplicationService:
         try:
             await self._claude_agent_gateway.disconnect(session_id)
         except Exception:
-            pass
+            logger.debug("Disconnect failed during force_cleanup for session=%s", session_id, exc_info=True)
         await self._claude_agent_gateway.cleanup_session(session_id)
 
     async def delete_session(self, session_id: str) -> bool:

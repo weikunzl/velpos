@@ -11,6 +11,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _mcp_ok(text: str) -> dict[str, Any]:
+    return {"content": [{"type": "text", "text": text}]}
+
+
+def _mcp_err(text: str) -> dict[str, Any]:
+    return {"content": [{"type": "text", "text": text}], "is_error": True}
+
+
 def create_team_coordinator_mcp(
     coordinator_service: "TeamCoordinatorService",
     project_id: str,
@@ -39,10 +47,7 @@ def create_team_coordinator_mcp(
         context = args.get("context", "")
 
         if not role or not prompt:
-            return {
-                "content": [{"type": "text", "text": "Error: both 'role' and 'prompt' are required."}],
-                "is_error": True,
-            }
+            return _mcp_err("Error: both 'role' and 'prompt' are required.")
 
         try:
             result = await coordinator_service.dispatch_task(
@@ -53,34 +58,28 @@ def create_team_coordinator_mcp(
                 context=context,
                 trace_id=trace_id,
             )
-            return {"content": [{"type": "text", "text": result}]}
+            return _mcp_ok(result)
         except Exception as e:
             logger.error(
                 "team_dispatch failed: project=%s, role=%s, error=%s",
                 project_id, role, e,
                 exc_info=True,
             )
-            return {
-                "content": [{"type": "text", "text": f"Dispatch failed: {e}"}],
-                "is_error": True,
-            }
+            return _mcp_err(f"Dispatch failed: {e}")
 
     @tool(
         "team_task_status",
         "Check the status of all dispatched tasks for the current coordinator session.",
         {},
     )
-    async def team_task_status(args: dict[str, Any]) -> dict[str, Any]:
+    async def team_task_status(_args: dict[str, Any]) -> dict[str, Any]:
         try:
             status_text = await coordinator_service.get_tasks_status(
                 coordinator_session_id=coordinator_session_id,
             )
-            return {"content": [{"type": "text", "text": status_text}]}
+            return _mcp_ok(status_text)
         except Exception as e:
-            return {
-                "content": [{"type": "text", "text": f"Status check failed: {e}"}],
-                "is_error": True,
-            }
+            return _mcp_err(f"Status check failed: {e}")
 
     @tool(
         "team_dispatch_batch",
@@ -94,10 +93,7 @@ def create_team_coordinator_mcp(
     async def team_dispatch_batch(args: dict[str, Any]) -> dict[str, Any]:
         tasks_input = args.get("tasks", [])
         if not tasks_input or not isinstance(tasks_input, list):
-            return {
-                "content": [{"type": "text", "text": "Error: 'tasks' must be a non-empty list."}],
-                "is_error": True,
-            }
+            return _mcp_err("Error: 'tasks' must be a non-empty list.")
 
         try:
             results = await coordinator_service.dispatch_batch(
@@ -110,17 +106,14 @@ def create_team_coordinator_mcp(
                 f"## Task {i+1}: {tasks_input[i].get('role', '?')}\n\n{r}"
                 for i, r in enumerate(results)
             )
-            return {"content": [{"type": "text", "text": combined}]}
+            return _mcp_ok(combined)
         except Exception as e:
             logger.error(
                 "team_dispatch_batch failed: project=%s, error=%s",
                 project_id, e,
                 exc_info=True,
             )
-            return {
-                "content": [{"type": "text", "text": f"Batch dispatch failed: {e}"}],
-                "is_error": True,
-            }
+            return _mcp_err(f"Batch dispatch failed: {e}")
 
     server = create_sdk_mcp_server(
         name="team_coordinator",
@@ -153,10 +146,7 @@ def create_team_worker_mcp(
         target_role = args.get("target_role", "")
 
         if not question:
-            return {
-                "content": [{"type": "text", "text": "Error: 'question' is required."}],
-                "is_error": True,
-            }
+            return _mcp_err("Error: 'question' is required.")
 
         try:
             answer = await coordinator_service.handle_help_request(
@@ -164,17 +154,14 @@ def create_team_worker_mcp(
                 question=question,
                 target_role=target_role,
             )
-            return {"content": [{"type": "text", "text": answer}]}
+            return _mcp_ok(answer)
         except Exception as e:
             logger.error(
                 "team_ask_coordinator failed: worker=%s, error=%s",
                 worker_session_id, e,
                 exc_info=True,
             )
-            return {
-                "content": [{"type": "text", "text": f"Help request failed: {e}"}],
-                "is_error": True,
-            }
+            return _mcp_err(f"Help request failed: {e}")
 
     server = create_sdk_mcp_server(
         name="team_worker",

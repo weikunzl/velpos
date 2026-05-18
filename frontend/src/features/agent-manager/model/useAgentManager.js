@@ -22,7 +22,7 @@ export function useAgentManager() {
       if (seq !== _fetchSeq) return
       error.value = e.message
     } finally {
-      loading.value = false
+      if (seq === _fetchSeq) loading.value = false
     }
   }
 

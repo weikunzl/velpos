@@ -6,7 +6,7 @@ import { useClickOutside } from '@shared/lib/useClickOutside'
 import { useEscapeToClose } from '@shared/lib/useDialogManager'
 
 const { theme, setTheme } = useTheme()
-const { brightness, warmth, isActive: eyeCareActive, reset: resetEyeCare } = useEyeCare()
+const { brightness, warmth, reset: resetEyeCare } = useEyeCare()
 
 const showPanel = ref(false)
 const switcherRef = ref(null)

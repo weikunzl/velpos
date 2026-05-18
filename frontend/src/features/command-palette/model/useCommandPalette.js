@@ -66,7 +66,7 @@ export function useCommandPalette() {
       if (seq !== _loadCmdSeq) return
       error.value = e.message
     } finally {
-      loading.value = false
+      if (seq === _loadCmdSeq) loading.value = false
     }
   }
 

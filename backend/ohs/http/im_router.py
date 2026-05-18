@@ -34,8 +34,10 @@ async def list_channels(
     channels = await channel_service.list_available_channels()
     result = []
     for c in channels:
-        instances = [ChannelInstanceInfo(**inst) for inst in c.pop("instances", [])]
-        result.append(ChannelInfo(**c, instances=instances))
+        instances_raw = c.get("instances", [])
+        instances = [ChannelInstanceInfo(**inst) for inst in instances_raw]
+        channel_data = {k: v for k, v in c.items() if k != "instances"}
+        result.append(ChannelInfo(**channel_data, instances=instances))
     return ApiResponse.success(result)
 
 

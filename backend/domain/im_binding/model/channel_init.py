@@ -44,7 +44,7 @@ class ChannelInit:
 
     @property
     def config(self) -> dict:
-        return self._config
+        return dict(self._config)
 
     @property
     def error_message(self) -> str:

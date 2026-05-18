@@ -110,7 +110,7 @@ class ProjectApplicationService:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await proc.communicate()
+            _, stderr = await proc.communicate()
             if proc.returncode != 0:
                 err_msg = stderr.decode().strip() if stderr else "git clone failed"
                 raise BusinessException(

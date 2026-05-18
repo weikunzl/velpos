@@ -45,7 +45,7 @@ class ImBinding:
 
     @property
     def config(self) -> dict:
-        return self._config
+        return dict(self._config)
 
     @property
     def im_user_id(self) -> str:

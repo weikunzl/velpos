@@ -102,7 +102,7 @@ export function useSessionList() {
       if (seq !== _loadSeq) return
       setSessions([...vpSessions, ...claudeSessions])
     } finally {
-      loading.value = false
+      if (seq === _loadSeq) loading.value = false
     }
   }
 

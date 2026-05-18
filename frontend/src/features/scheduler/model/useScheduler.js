@@ -22,7 +22,7 @@ export function useScheduler() {
       if (seq !== _loadSeq) return
       error.value = e.message || 'Failed to load schedules'
     } finally {
-      loading.value = false
+      if (seq === _loadSeq) loading.value = false
     }
   }
 

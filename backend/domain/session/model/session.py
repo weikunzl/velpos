@@ -219,6 +219,12 @@ class Session:
             raise ValueError("Session is already running")
         self._status = SessionStatus.RUNNING
 
+    def _finish_running(self) -> None:
+        """Common transition from RUNNING to IDLE."""
+        self._status = SessionStatus.IDLE
+        self._continue_conversation = True
+        self._updated_time = datetime.now()
+
     def complete_query(self) -> None:
         """Transition status from RUNNING to IDLE.
 
@@ -227,9 +233,7 @@ class Session:
         """
         if self._status != SessionStatus.RUNNING:
             raise ValueError("Session is not running")
-        self._status = SessionStatus.IDLE
-        self._continue_conversation = True
-        self._updated_time = datetime.now()
+        self._finish_running()
 
     def cancel_query(self) -> str:
         """Cancel a running query and rewind to before the last user message.
@@ -241,9 +245,7 @@ class Session:
         """
         if self._status != SessionStatus.RUNNING:
             raise ValueError("Session is not running")
-        self._status = SessionStatus.IDLE
-        self._continue_conversation = True
-        self._updated_time = datetime.now()
+        self._finish_running()
 
         # Find and remove the last user message and everything after it
         prompt = ""
@@ -296,6 +298,13 @@ class Session:
             raise ValueError("message must not be None")
         self._messages.append(message)
 
+    @staticmethod
+    def _validate_token_counts(input_tokens: int, output_tokens: int) -> None:
+        if input_tokens < 0:
+            raise ValueError("input_tokens must be >= 0")
+        if output_tokens < 0:
+            raise ValueError("output_tokens must be >= 0")
+
     def update_usage(self, input_tokens: int, output_tokens: int) -> None:
         """Replace usage with the latest query's token counts.
 
@@ -303,10 +312,7 @@ class Session:
         consumption (all prior messages included), so we overwrite rather than
         accumulate.  output_tokens is the model's response for this query.
         """
-        if input_tokens < 0:
-            raise ValueError("input_tokens must be >= 0")
-        if output_tokens < 0:
-            raise ValueError("output_tokens must be >= 0")
+        self._validate_token_counts(input_tokens, output_tokens)
         self._usage = Usage(input_tokens=input_tokens, output_tokens=output_tokens)
 
     def update_sdk_session_id(self, sdk_session_id: str) -> None:
@@ -414,10 +420,7 @@ class Session:
         """
         if self._usage.input_tokens != 0 or self._usage.output_tokens != 0:
             raise ValueError("Cannot initialize usage: current usage is non-zero")
-        if input_tokens < 0:
-            raise ValueError("input_tokens must be >= 0")
-        if output_tokens < 0:
-            raise ValueError("output_tokens must be >= 0")
+        self._validate_token_counts(input_tokens, output_tokens)
         self._usage = Usage(input_tokens=input_tokens, output_tokens=output_tokens)
 
     def start_compact(self) -> None:
