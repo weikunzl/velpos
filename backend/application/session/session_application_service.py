@@ -859,7 +859,7 @@ class SessionApplicationService:
         await self._claude_agent_gateway.cleanup_session(session_id)
 
         # Clean up session lock to prevent memory leak
-        async with self._session_locks_guard:
+        async with self._get_session_locks_guard():
             lock = self._session_locks.get(session_id)
             if lock and not lock.locked():
                 self._session_locks.pop(session_id, None)

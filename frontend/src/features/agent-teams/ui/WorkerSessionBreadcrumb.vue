@@ -10,15 +10,20 @@ const props = defineProps({
 const emit = defineEmits(['navigate-back'])
 
 const context = ref(null)
+let _loadSeq = 0
 
 async function loadContext() {
   if (!props.teamTaskId || !props.sessionId) {
     context.value = null
     return
   }
+  const seq = ++_loadSeq
   try {
-    context.value = await getWorkerContext(props.sessionId)
+    const data = await getWorkerContext(props.sessionId)
+    if (seq !== _loadSeq) return
+    context.value = data
   } catch {
+    if (seq !== _loadSeq) return
     context.value = null
   }
 }
