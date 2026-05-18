@@ -90,24 +90,15 @@ const ruleDiffIndexes = computed(() => ruleCompareRows.value
   .filter(index => index >= 0))
 const ruleDiffSummary = computed(() => `${ruleDiffIndexes.value.length} diffs`)
 
-watch(() => props.visible, async (visible) => {
-  if (visible && props.projectDir) {
-    await Promise.all([
-      loadClaudeMd(props.projectDir),
-      loadRules(props.projectDir),
-    ])
-  } else if (!visible) {
-    resetCompareState()
-    reset()
-  }
-})
-
-watch(() => props.projectDir, async (dir) => {
-  if (props.visible && dir) {
+watch([() => props.visible, () => props.projectDir], async ([visible, dir], [prevVisible]) => {
+  if (visible && dir) {
     await Promise.all([
       loadClaudeMd(dir),
       loadRules(dir),
     ])
+  } else if (!visible && prevVisible) {
+    resetCompareState()
+    reset()
   }
 })
 

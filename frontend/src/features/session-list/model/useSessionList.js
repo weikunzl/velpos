@@ -42,8 +42,10 @@ export function useSessionList() {
   } = useProject()
 
   const loading = ref(false)
+  let _loadSeq = 0
 
   async function loadSessions() {
+    const seq = ++_loadSeq
     loading.value = true
     try {
       // Load projects, VP sessions, and Claude Code sessions in parallel
@@ -75,6 +77,7 @@ export function useSessionList() {
       const freshProjects = cwds.length > 0
         ? await listProjects()
         : projectsData
+      if (seq !== _loadSeq) return
       setProjects(freshProjects.projects || [])
 
       // Convert Claude Code sessions to a compatible format with project_id from mappings
@@ -96,6 +99,7 @@ export function useSessionList() {
       const vpSessions = vpData.sessions.map(s => ({ ...s, source: 'velpos' }))
 
       // Merge: VP sessions first, then Claude Code sessions
+      if (seq !== _loadSeq) return
       setSessions([...vpSessions, ...claudeSessions])
     } finally {
       loading.value = false

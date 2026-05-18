@@ -25,9 +25,10 @@ export function useScheduler() {
   async function mutate(fn, fallbackMsg) {
     saving.value = true
     error.value = ''
+    const projectId = activeProjectId.value
     try {
       await fn()
-      await loadSchedules(activeProjectId.value)
+      await loadSchedules(projectId)
       window.dispatchEvent(new CustomEvent('vp-schedules-changed'))
     } catch (e) {
       error.value = e.message || fallbackMsg

@@ -10,11 +10,11 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from infr.config.base import DATABASE_URL, Base
+from infr.config.base import DATABASE_URL
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["DATABASE_URL", "Base", "async_engine", "async_session_factory", "get_async_session"]
+__all__ = ["DATABASE_URL", "async_engine", "async_session_factory", "get_async_session"]
 
 async_engine = create_async_engine(
     DATABASE_URL,

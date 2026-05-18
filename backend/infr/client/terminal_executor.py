@@ -30,6 +30,7 @@ class TerminalExecutor:
 
     def __init__(self) -> None:
         self._pty_sessions: dict[str, PtySession] = {}
+        self._pty_lock = asyncio.Lock()
         self._app_cache: list[dict[str, str]] | None = None
 
     async def execute(
@@ -99,13 +100,14 @@ class TerminalExecutor:
         self._set_pty_size(master_fd, cols, rows)
 
         terminal_id = uuid.uuid4().hex
-        self._pty_sessions[terminal_id] = PtySession(
-            terminal_id=terminal_id,
-            pid=pid,
-            master_fd=master_fd,
-            cwd=resolved_cwd,
-            shell=shell,
-        )
+        async with self._pty_lock:
+            self._pty_sessions[terminal_id] = PtySession(
+                terminal_id=terminal_id,
+                pid=pid,
+                master_fd=master_fd,
+                cwd=resolved_cwd,
+                shell=shell,
+            )
         return {"terminal_id": terminal_id, "cwd": resolved_cwd, "shell": shell}
 
     async def read_pty(self, terminal_id: str) -> str:
@@ -145,7 +147,8 @@ class TerminalExecutor:
         self._set_pty_size(session.master_fd, cols, rows)
 
     async def close_pty(self, terminal_id: str) -> None:
-        session = self._pty_sessions.pop(terminal_id, None)
+        async with self._pty_lock:
+            session = self._pty_sessions.pop(terminal_id, None)
         if session is None:
             return
         try:
