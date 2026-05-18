@@ -1,13 +1,15 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref } from 'vue'
 import { useWorkingSessions } from '../model/useWorkingSessions'
 import { useDialogManager } from '@shared/lib/useDialogManager'
+import { useClickOutside } from '@shared/lib/useClickOutside'
 import WorkingSessionsPanel from './WorkingSessionsPanel.vue'
 
 const emit = defineEmits(['navigate'])
 
 const { workingCount } = useWorkingSessions()
 const showPanel = ref(false)
+const wrapperRef = ref(null)
 
 // 使用全局弹窗管理器
 const { useDialog } = useDialogManager()
@@ -21,24 +23,13 @@ function handleNavigate(sessionId) {
   emit('navigate', sessionId)
 }
 
-function handleClickOutside(e) {
-  const el = e.target.closest('.working-sessions-wrapper')
-  if (!el) showPanel.value = false
-}
-
-onMounted(() => {
-  document.addEventListener('click', handleClickOutside, true)
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener('click', handleClickOutside, true)
-})
+useClickOutside(wrapperRef, () => { showPanel.value = false }, { event: 'click' })
 </script>
 
 <template>
-  <div class="working-sessions-wrapper">
+  <div class="working-sessions-wrapper" ref="wrapperRef">
     <button
-      class="working-sessions-btn"
+      class="glass-btn glass-btn--icon working-sessions-btn"
       @click="togglePanel"
       aria-label="Working sessions"
       title="Working sessions"
@@ -63,31 +54,6 @@ onBeforeUnmount(() => {
 
 .working-sessions-btn {
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 32px;
-  background: color-mix(in srgb, var(--glass-bg) 36%, transparent);
-  border: 1px solid color-mix(in srgb, var(--glass-border) 70%, transparent);
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
-  cursor: pointer;
-  backdrop-filter: blur(calc(var(--glass-blur) * 0.8)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.8)) saturate(var(--glass-saturate));
-  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
-}
-
-.working-sessions-btn:hover {
-  background: var(--layer-active);
-  border-color: var(--accent);
-  color: var(--accent);
-  box-shadow: var(--shadow-sm);
-}
-
-.working-sessions-btn:active {
-  transform: scale(0.96);
-  transition-duration: 100ms;
 }
 
 .badge {

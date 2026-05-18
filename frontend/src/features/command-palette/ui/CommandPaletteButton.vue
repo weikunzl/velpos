@@ -11,7 +11,7 @@ const emit = defineEmits(['click'])
 
 <template>
   <button
-    class="cmd-btn"
+    class="glass-btn glass-btn--accent cmd-btn"
     :disabled="disabled"
     @click="emit('click')"
     data-tooltip="Skills"
@@ -27,27 +27,8 @@ const emit = defineEmits(['click'])
 <style scoped>
 .cmd-btn {
   position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent);
-  color: var(--text-secondary);
-  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border));
   padding: 6px 8px;
   min-height: 30px;
-  border-radius: var(--radius-md);
-  font-size: 11px;
-  cursor: pointer;
-  backdrop-filter: blur(calc(var(--glass-blur) * 0.8)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.8)) saturate(var(--glass-saturate));
-  transition:
-    color var(--transition-fast),
-    background var(--transition-fast),
-    border-color var(--transition-fast),
-    box-shadow var(--transition-fast),
-    transform var(--transition-fast);
-  font-family: var(--font-sans);
-  white-space: nowrap;
 }
 
 .cmd-btn::before {
@@ -65,23 +46,6 @@ const emit = defineEmits(['click'])
 
 .cmd-btn > * {
   position: relative;
-}
-
-.cmd-btn:hover:not(:disabled) {
-  color: var(--accent);
-  background: var(--layer-active);
-  border-color: var(--accent);
-  box-shadow: var(--shadow-sm);
-}
-
-.cmd-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.cmd-btn:active:not(:disabled) {
-  transform: scale(0.96);
-  transition-duration: 100ms;
 }
 
 .cmd-btn[data-tooltip]::after {

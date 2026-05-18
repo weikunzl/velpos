@@ -58,7 +58,7 @@ class ClaudeAgentGateway(ClaudeAgentGatewayPort):
         # session_id -> pending request context (questions list for AskUserQuestion)
         self._pending_request_context: dict[str, dict[str, Any]] = {}
         # callback for persisting pending request context
-        self._persist_pending_request_context_fn: Any = None
+        self._persist_pending_request_context_fn: Callable[[str, dict[str, Any] | None], Any] | None = None
         # session_id -> last activity timestamp
         self._last_activity: dict[str, float] = {}
         # session_id -> asyncio.TimerHandle for scheduled idle disconnect
@@ -68,9 +68,9 @@ class ClaudeAgentGateway(ClaudeAgentGatewayPort):
         # session_id -> coarse SDK state for UI diagnostics
         self._session_states: dict[str, str] = {}
         # broadcast callback: set externally to push events to WS clients
-        self._broadcast_fn: Any = None
+        self._broadcast_fn: Callable[[str, dict[str, Any]], Any] | None = None
         # IM binding check callback: set externally to protect bound sessions
-        self._is_im_bound_fn: Any = None
+        self._is_im_bound_fn: Callable[[str], Any] | None = None
         # Lock for protecting _pending_user_responses mutations
         self._lock = asyncio.Lock()
         # Lock for protecting client lifecycle (connect/disconnect)
@@ -86,15 +86,15 @@ class ClaudeAgentGateway(ClaudeAgentGatewayPort):
         fut = self._pending_user_responses.get(session_id)
         return self.get_state(session_id) == "waiting_permission" or bool(fut and not fut.done())
 
-    def set_broadcast_fn(self, fn: Any) -> None:
+    def set_broadcast_fn(self, fn: Callable[[str, dict[str, Any]], Any]) -> None:
         """Set the broadcast function for pushing events to WebSocket clients."""
         self._broadcast_fn = fn
 
-    def set_is_im_bound_fn(self, fn: Any) -> None:
+    def set_is_im_bound_fn(self, fn: Callable[[str], Any]) -> None:
         """Set the callback to check if a session has an active IM binding."""
         self._is_im_bound_fn = fn
 
-    def set_persist_pending_request_context_fn(self, fn: Any) -> None:
+    def set_persist_pending_request_context_fn(self, fn: Callable[[str, dict[str, Any] | None], Any]) -> None:
         """Set the callback for persisting pending request context."""
         self._persist_pending_request_context_fn = fn
 
@@ -485,7 +485,7 @@ class ClaudeAgentGateway(ClaudeAgentGatewayPort):
         except Exception:
             logger.warning("force kill failed", exc_info=True)
 
-    def cleanup_session(self, session_id: str) -> None:
+    async def cleanup_session(self, session_id: str) -> None:
         """Remove all tracked state for a session (call after full deletion)."""
         self._sdk_session_ids.pop(session_id, None)
         self._session_cwds.pop(session_id, None)
@@ -496,8 +496,9 @@ class ClaudeAgentGateway(ClaudeAgentGatewayPort):
         timer = self._idle_timers.pop(session_id, None)
         if timer is not None:
             timer.cancel()
-        fut = self._pending_user_responses.pop(session_id, None)
-        self._pending_request_context.pop(session_id, None)
+        async with self._lock:
+            fut = self._pending_user_responses.pop(session_id, None)
+            self._pending_request_context.pop(session_id, None)
         if fut and not fut.done():
             fut.cancel()
 

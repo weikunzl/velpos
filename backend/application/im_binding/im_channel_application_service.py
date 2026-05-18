@@ -221,12 +221,6 @@ class ImChannelApplicationService:
     async def get_binding(self, session_id: str) -> ImBinding | None:
         return await self._binding_repo.find_by_session_id(session_id)
 
-    async def get_binding_by_channel(
-        self, session_id: str, channel_type: str,
-    ) -> ImBinding | None:
-        ct = ImChannelType(channel_type)
-        return await self._binding_repo.find_by_session_and_channel(session_id, ct)
-
     async def list_all_bindings(self) -> list[dict[str, Any]]:
         """Return summary of all active bindings for session list enrichment."""
         bindings = await self._binding_repo.find_all_bound()
@@ -378,7 +372,7 @@ class ImChannelApplicationService:
 
     # ── 解绑 ──
 
-    async def unbind(self, session_id: str, channel_type: str = "") -> None:
+    async def unbind(self, session_id: str) -> None:
         binding = await self._binding_repo.find_by_session_id(session_id)
         if binding is None:
             return
@@ -504,33 +498,6 @@ class ImChannelApplicationService:
         return ""
 
     # ── 入站消息处理 ──
-
-    async def handle_inbound_message(
-        self,
-        channel_type: str,
-        channel_address: str,
-        message_id: str,
-        content: str,
-        sender_id: str = "",
-        group_id: str = "",
-    ) -> None:
-        logger.info(
-            "[IM-inbound] Received: channel=%s address=%s msg_id=%s sender=%s content=%.100s",
-            channel_type, channel_address, message_id, sender_id, content,
-        )
-        ct = ImChannelType(channel_type)
-        binding = await self._binding_repo.find_by_channel(ct, channel_address)
-        if binding is None or binding.binding_status != BindingStatus.BOUND:
-            logger.warning(
-                "[IM-inbound] No active binding for %s address=%s, skipping",
-                channel_type, channel_address,
-            )
-            return
-
-        logger.info("[IM-inbound] Found binding: session=%s, dispatching", binding.session_id)
-        safe_create_task(
-            self._process_inbound(binding, message_id, content, sender_id, group_id)
-        )
 
     async def _process_inbound(
         self,

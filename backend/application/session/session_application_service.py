@@ -28,6 +28,7 @@ from domain.session.service.message_conversion_service import MessageConversionS
 from domain.project.model.project import Project
 from domain.project.repository.project_repository import ProjectRepository
 from domain.session.repository.session_repository import SessionRepository
+from domain.session.acl.claude_session_manager import ClaudeSessionManager
 from domain.session.model.session_audit_event import SessionAuditEvent
 from domain.session.repository.session_audit_event_repository import SessionAuditEventRepository
 from domain.shared.business_exception import BusinessException
@@ -69,7 +70,7 @@ class SessionApplicationService:
         session_repository: SessionRepository,
         claude_agent_gateway: ClaudeAgentGateway,
         connection_manager: ConnectionManager,
-        claude_session_manager: Any = None,
+        claude_session_manager: ClaudeSessionManager | None = None,
         on_assistant_response: Callable[[str, str], Awaitable[None]] | None = None,
         on_user_message: Callable[[str, str], Awaitable[None]] | None = None,
         project_repository: ProjectRepository | None = None,
@@ -794,17 +795,13 @@ class SessionApplicationService:
     async def get_current_git_branch(self, project_dir: str) -> str:
         return await _get_current_git_branch(project_dir)
 
-    async def get_git_branch_for_session(self, session_id: str) -> str:
-        session = await self.get_session(session_id)
-        return await self.get_current_git_branch(session.project_dir)
-
     async def force_cleanup(self, session_id: str) -> None:
         """Disconnect and cleanup gateway state for a session without touching the DB."""
         try:
             await self._claude_agent_gateway.disconnect(session_id)
         except Exception:
             pass
-        self._claude_agent_gateway.cleanup_session(session_id)
+        await self._claude_agent_gateway.cleanup_session(session_id)
 
     async def delete_session(self, session_id: str) -> bool:
         """Delete a session by session_id.
@@ -836,7 +833,7 @@ class SessionApplicationService:
             )
 
         # Clean up all tracked gateway state for this session
-        self._claude_agent_gateway.cleanup_session(session_id)
+        await self._claude_agent_gateway.cleanup_session(session_id)
 
         # Clean up session lock to prevent memory leak
         async with self._session_locks_guard:
@@ -922,11 +919,11 @@ class SessionApplicationService:
                     command.session_id, e,
                 )
                 await self._claude_agent_gateway.disconnect(command.session_id)
-                self._claude_agent_gateway.cleanup_session(command.session_id)
+                await self._claude_agent_gateway.cleanup_session(command.session_id)
                 session.clear_context()
         else:
             # Not connected — just reset locally
-            self._claude_agent_gateway.cleanup_session(command.session_id)
+            await self._claude_agent_gateway.cleanup_session(command.session_id)
             session.clear_context()
 
         await self._save_session(session, commit=True)
@@ -1828,14 +1825,14 @@ class SessionApplicationService:
     async def rewind_to_message_id(self, session_id: str, message_id: str) -> None:
         session = await self._session_repository.find_by_id(session_id)
         if session is None:
-            raise ValueError(f"Session not found: {session_id}")
+            raise BusinessException(f"Session not found: {session_id}")
 
         for index, msg in enumerate(session.messages):
             if msg.message_type == MessageType.USER and msg.content.get("message_id") == message_id:
                 await self.rewind_to_message(session_id, index)
                 return
 
-        raise ValueError(f"User message not found: {message_id}")
+        raise BusinessException(f"User message not found: {message_id}")
 
     async def rewind_to_message(self, session_id: str, message_index: int) -> None:
         """Rewind session to a specific user message index.
@@ -1847,7 +1844,7 @@ class SessionApplicationService:
         """
         session = await self._session_repository.find_by_id(session_id)
         if session is None:
-            raise ValueError(f"Session not found: {session_id}")
+            raise BusinessException(f"Session not found: {session_id}")
 
         # Count user messages after (and including) the target index
         rewind_count = sum(
@@ -1928,14 +1925,6 @@ class SessionApplicationService:
         await self._set_queued_command(session_id, None)
         if removed:
             logger.info("[session=%s] 已清除排队消息", session_id)
-
-    async def has_queued_message(self, session_id: str) -> bool:
-        async with self._queue_guard:
-            return session_id in self._queued_messages
-
-    async def disconnect_session(self, session_id: str) -> None:
-        """Disconnect the SDK client for a session."""
-        await self._claude_agent_gateway.disconnect(session_id)
 
     async def set_model(self, session_id: str, model: str) -> None:
         """Change the model for an active session.

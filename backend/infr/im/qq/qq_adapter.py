@@ -103,7 +103,7 @@ class QqAdapter(ImChannelAdapter):
     # ── Binding lifecycle ──
 
     async def bind(
-        self, session_id: str, binding: ImBinding, params: dict,
+        self, session_id: str, _binding: ImBinding, params: dict,
     ) -> BindResult:
         app_id = params.get("app_id", "")
         app_secret = params.get("app_secret", "")
@@ -150,7 +150,7 @@ class QqAdapter(ImChannelAdapter):
         await self._ws.stop(channel_id)
 
     async def complete_bind(
-        self, binding: ImBinding, params: dict,
+        self, binding: ImBinding, _params: dict,
     ) -> BindResult:
         return BindResult(
             status=BindingStatus.BOUND,

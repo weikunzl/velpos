@@ -188,7 +188,7 @@ class WeixinAdapter(ImChannelAdapter):
         )
 
     async def complete_bind(
-        self, binding: ImBinding, params: dict,
+        self, binding: ImBinding, _params: dict,
     ) -> BindResult:
         return BindResult(
             status=BindingStatus.BOUND,
@@ -410,7 +410,7 @@ class WeixinAdapter(ImChannelAdapter):
     # ── Reactions (typing indicator) ──
 
     async def add_reaction(
-        self, binding: ImBinding, message_id: str, reaction: str,
+        self, binding: ImBinding, message_id: str, _reaction: str,
     ) -> None:
         bot_token = binding.config.get("bot_token", "")
         user_id = binding.config.get("last_sender_id", "")
@@ -418,7 +418,7 @@ class WeixinAdapter(ImChannelAdapter):
             await self._api.send_typing(bot_token, user_id, message_id, 1)
 
     async def remove_reaction(
-        self, binding: ImBinding, message_id: str, reaction: str,
+        self, binding: ImBinding, message_id: str, _reaction: str,
     ) -> None:
         bot_token = binding.config.get("bot_token", "")
         user_id = binding.config.get("last_sender_id", "")

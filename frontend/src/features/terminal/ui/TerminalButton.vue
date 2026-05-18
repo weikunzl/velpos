@@ -15,7 +15,7 @@ const emit = defineEmits(['click'])
 
 <template>
   <button
-    class="terminal-btn"
+    class="glass-btn glass-btn--icon"
     :class="{ active }"
     :disabled="disabled"
     @click="emit('click')"
@@ -29,45 +29,11 @@ const emit = defineEmits(['click'])
 </template>
 
 <style scoped>
-.terminal-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 32px;
-  padding: 0;
-  border: 1px solid color-mix(in srgb, var(--glass-border) 70%, transparent);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--glass-bg) 36%, transparent);
-  color: var(--text-secondary);
-  cursor: pointer;
-  backdrop-filter: blur(calc(var(--glass-blur) * 0.8)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.8)) saturate(var(--glass-saturate));
-  transition:
-    color var(--transition-fast),
-    background var(--transition-fast),
-    border-color var(--transition-fast),
-    box-shadow var(--transition-fast),
-    transform var(--transition-fast);
-}
-
-.terminal-btn:hover:not(:disabled),
-.terminal-btn.active:not(:disabled) {
+.glass-btn.active:not(:disabled) {
   background: var(--layer-active);
   color: var(--accent);
   border-color: var(--accent);
   box-shadow: var(--shadow-sm);
 }
-
-.terminal-btn:active:not(:disabled) {
-  transform: scale(0.96);
-  transition-duration: 100ms;
-}
-
-.terminal-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
 </style>
 

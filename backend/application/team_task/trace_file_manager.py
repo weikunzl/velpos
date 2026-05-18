@@ -151,41 +151,6 @@ class TraceFileManager:
             )
         await cls._release_lock(trace_id)
 
-    @classmethod
-    async def read_trace(
-        cls,
-        project_dir: str,
-        trace_id: str,
-    ) -> dict[str, Any] | None:
-        return await asyncio.to_thread(
-            cls._read_json, cls.trace_path(project_dir, trace_id),
-        )
-
-    @classmethod
-    async def list_traces(cls, project_dir: str) -> list[dict[str, Any]]:
-        trace_directory = cls.trace_dir(project_dir)
-        if not os.path.isdir(trace_directory):
-            return []
-
-        summaries: list[dict[str, Any]] = []
-        for filename in sorted(os.listdir(trace_directory), reverse=True):
-            if not filename.endswith(".json"):
-                continue
-            path = os.path.join(trace_directory, filename)
-            data = await asyncio.to_thread(cls._read_json, path)
-            if data is None:
-                continue
-            summaries.append({
-                "trace_id": data.get("trace_id", ""),
-                "requirement": data.get("requirement", "")[:120],
-                "status": data.get("status", ""),
-                "created_at": data.get("created_at", ""),
-                "updated_at": data.get("updated_at", ""),
-                "task_count": len(data.get("call_chain", [])),
-                "artifact_count": len(data.get("artifacts", [])),
-            })
-        return summaries
-
     @staticmethod
     def _rebuild_artifacts(data: dict[str, Any]) -> None:
         seen: set[str] = set()

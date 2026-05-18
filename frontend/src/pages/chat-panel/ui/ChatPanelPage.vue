@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, inject, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, inject, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useGlobalHotkeys } from '@shared/lib/useGlobalHotkeys'
 import { formatDuration } from '@features/message-display'
 import { useDialogManager } from '@shared/lib/useDialogManager'
@@ -28,7 +28,7 @@ const {
   queryHistory, setCurrentSessionId, updateSession, setError, setCanceling, addSession,
   restoredPrompt, setRestoredPrompt,
 } = useSession()
-const { projects, updateProjectInList } = useProject()
+const { currentProject, updateProjectInList } = useProject()
 
 const wsConnection = inject('wsConnection')
 
@@ -46,13 +46,6 @@ const recoveryHintText = computed(() => {
 })
 const debugMode = ref(localStorage.getItem('pf_debug_mode') === 'true')
 const runtimePanelVisible = ref(localStorage.getItem('pf_runtime_panel') === 'true')
-
-// Current project for this session
-const currentProject = computed(() => {
-  const pid = session.value?.project_id
-  if (!pid) return null
-  return projects.value.find(p => p.id === pid) || null
-})
 
 const isTeamCoordinator = computed(() => {
   return currentProject.value?.project_type === 'team' && !session.value?.team_task_id
@@ -216,7 +209,7 @@ onMounted(async () => {
   }
 })
 
-onUnmounted(() => {
+onBeforeUnmount(() => {
   window.removeEventListener('pointermove', handleVideoDragMove)
   window.removeEventListener('pointerup', stopVideoDrag)
   stopVoiceRecording()
@@ -1027,7 +1020,7 @@ onMounted(() => {
   sessionElapsedTimer = setInterval(updateSessionElapsed, 30000)
 })
 
-onUnmounted(() => {
+onBeforeUnmount(() => {
   clearInterval(sessionElapsedTimer)
   clearTimeout(pendingSendTimer)
   if (_copiedChipTimer) clearTimeout(_copiedChipTimer)

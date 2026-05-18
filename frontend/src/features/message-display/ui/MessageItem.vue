@@ -24,14 +24,7 @@ const wsConnection = inject('wsConnection')
 // Track whether interactive messages have been answered
 const interactiveAnswered = ref(false)
 
-function handleChoiceAnswer(data) {
-  if (interactiveAnswered.value) return
-  if (wsConnection?.value && wsConnection.value.send({ action: 'user_response', data })) {
-    interactiveAnswered.value = true
-  }
-}
-
-function handlePermissionRespond(data) {
+function handleInteractiveResponse(data) {
   if (interactiveAnswered.value) return
   if (wsConnection?.value && wsConnection.value.send({ action: 'user_response', data })) {
     interactiveAnswered.value = true
@@ -71,10 +64,13 @@ function cachedParse(text) {
   const cached = _mdCache.get(text)
   if (cached) return cached
   const html = configuredMarked(text)
-  // Keep cache bounded
-  if (_mdCache.size > 500) {
-    const firstKey = _mdCache.keys().next().value
-    _mdCache.delete(firstKey)
+  if (_mdCache.size >= 300) {
+    let count = 0
+    const half = Math.floor(_mdCache.size / 2)
+    for (const k of _mdCache.keys()) {
+      if (count++ >= half) break
+      _mdCache.delete(k)
+    }
   }
   _mdCache.set(text, html)
   return html
@@ -172,7 +168,7 @@ watch(
 
     renderedBlocks.value = []
   },
-  { immediate: true, deep: true },
+  { immediate: true },
 )
 
 function attachmentHref(attachment) {
@@ -299,13 +295,13 @@ function handleDelegatedClick(e) {
         v-else-if="block.type === 'user_choice'"
         :block="block"
         :answered="interactiveAnswered"
-        @answer="handleChoiceAnswer"
+        @answer="handleInteractiveResponse"
       />
       <PermissionRequestBlock
         v-else-if="block.type === 'permission'"
         :block="block"
         :answered="interactiveAnswered"
-        @respond="handlePermissionRespond"
+        @respond="handleInteractiveResponse"
       />
     </template>
   </div>

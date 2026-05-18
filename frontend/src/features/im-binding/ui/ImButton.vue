@@ -36,7 +36,7 @@ function getLabel(bound, channelType, instanceName) {
 
 <template>
   <button
-    class="im-btn"
+    class="glass-btn glass-btn--accent im-btn"
     :class="{ 'im-btn--bound': bound }"
     :disabled="disabled"
     @click="emit('click')"
@@ -54,27 +54,6 @@ function getLabel(bound, channelType, instanceName) {
 .im-btn {
   position: relative;
   overflow: hidden;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 9px;
-  min-height: 32px;
-  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border));
-  border-radius: var(--radius-md);
-  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent);
-  color: var(--text-secondary);
-  font-size: 11px;
-  cursor: pointer;
-  backdrop-filter: blur(calc(var(--glass-blur) * 0.8)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.8)) saturate(var(--glass-saturate));
-  transition:
-    color var(--transition-fast),
-    background var(--transition-fast),
-    border-color var(--transition-fast),
-    transform var(--transition-fast),
-    box-shadow var(--transition-fast);
-  font-family: var(--font-sans);
-  white-space: nowrap;
 }
 
 .im-btn::before {
@@ -92,23 +71,6 @@ function getLabel(bound, channelType, instanceName) {
 
 .im-btn > * {
   position: relative;
-}
-
-.im-btn:hover:not(:disabled) {
-  background: var(--layer-active);
-  color: var(--accent);
-  border-color: var(--accent);
-  box-shadow: var(--shadow-sm);
-}
-
-.im-btn:active:not(:disabled) {
-  transform: scale(0.96);
-  transition-duration: 100ms;
-}
-
-.im-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 .im-btn--bound {

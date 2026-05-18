@@ -128,12 +128,6 @@ function handleConfirm() {
 function handleCancel() {
   emit('cancel')
 }
-
-function handleOverlayClick(e) {
-  if (e.target === e.currentTarget) {
-    handleCancel()
-  }
-}
 </script>
 
 <template>
@@ -141,7 +135,7 @@ function handleOverlayClick(e) {
     <div
       v-if="visible"
       class="dialog-overlay"
-      @click="handleOverlayClick"
+      @click.self="handleCancel"
       role="dialog"
       aria-modal="true"
       aria-label="Create new project"
@@ -262,16 +256,6 @@ function handleOverlayClick(e) {
 </template>
 
 <style scoped>
-.dialog-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--bg-overlay);
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
 .dialog {
   width: 520px;
   max-width: calc(100vw - 32px);
@@ -283,9 +267,6 @@ function handleOverlayClick(e) {
 }
 
 .dialog-title {
-  font-weight: 600;
-  font-size: 16px;
-  color: var(--text-primary);
   margin-bottom: 20px;
 }
 

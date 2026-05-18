@@ -1,6 +1,6 @@
 import { ref, computed, watch } from 'vue'
 import { useSession } from '@entities/session'
-import { listModels, getSessionUsage, getProjectUsage } from '@entities/session'
+import { listModels, getProjectUsage } from '@entities/session'
 
 const DEFAULT_CONTEXT_SIZE = 200000
 
@@ -8,25 +8,27 @@ const DEFAULT_CONTEXT_SIZE = 200000
 const modelContextSizes = ref({})
 const projectUsageSummary = ref(null)
 let usageFetchKey = ''
-let modelsFetched = false
+let _modelsPromise = null
 
 
 async function ensureModelsFetched() {
-  if (modelsFetched) return
-  try {
-    const res = await listModels()
-    const models = res || []
-    const sizes = {}
-    for (const m of models) {
-      if (m.value && m.context_window) {
-        sizes[m.value] = m.context_window
+  if (_modelsPromise) return _modelsPromise
+  _modelsPromise = (async () => {
+    try {
+      const res = await listModels()
+      const models = res || []
+      const sizes = {}
+      for (const m of models) {
+        if (m.value && m.context_window) {
+          sizes[m.value] = m.context_window
+        }
       }
+      modelContextSizes.value = sizes
+    } catch {
+      _modelsPromise = null
     }
-    modelContextSizes.value = sizes
-    modelsFetched = true
-  } catch {
-    // keep defaults — modelsFetched stays false so next call retries
-  }
+  })()
+  return _modelsPromise
 }
 
 export function useSessionStats() {
@@ -41,10 +43,9 @@ export function useSessionStats() {
     if (key === usageFetchKey) return
     usageFetchKey = key
     try {
-      const [, projectUsage] = await Promise.all([
-        getSessionUsage(current.session_id),
-        current.project_id ? getProjectUsage(current.project_id, true) : Promise.resolve(null),
-      ])
+      const projectUsage = await (
+        current.project_id ? getProjectUsage(current.project_id, true) : Promise.resolve(null)
+      )
       projectUsageSummary.value = projectUsage
     } catch {
       // keep previous usage display

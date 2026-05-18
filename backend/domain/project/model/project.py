@@ -71,9 +71,6 @@ class Project:
     def is_agent_locked(self) -> bool:
         return bool(self._agents.get("locked_by_task"))
 
-    def agent_locked_by(self) -> str:
-        return self._agents.get("locked_by_task", "")
-
     @property
     def plugins(self) -> dict[str, dict]:
         return dict(self._plugins)
@@ -118,10 +115,6 @@ class Project:
         if not plugin:
             return PluginInitStatus.NONE
         return PluginInitStatus(plugin["status"])
-
-    def get_plugin_init_session_id(self, plugin_type: PluginType) -> str:
-        plugin = self._plugins.get(plugin_type.value)
-        return plugin.get("session_id", "") if plugin else ""
 
     # ------------------------------------------------------------------
     # Factories

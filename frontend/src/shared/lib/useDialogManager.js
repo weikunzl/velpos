@@ -1,4 +1,4 @@
-import { reactive, onUnmounted } from 'vue'
+import { reactive, onBeforeUnmount } from 'vue'
 import { useGlobalHotkeys } from './useGlobalHotkeys'
 
 const dialogs = reactive(new Map())
@@ -37,7 +37,7 @@ export function useDialogManager() {
   // 自动清理的注册函数
   function useDialog(key, ref) {
     registerDialog(key, ref)
-    onUnmounted(() => {
+    onBeforeUnmount(() => {
       unregisterDialog(key)
     })
   }

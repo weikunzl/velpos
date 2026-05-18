@@ -4,7 +4,7 @@ const emit = defineEmits(['click'])
 
 <template>
   <button
-    class="git-btn"
+    class="glass-btn"
     @click="emit('click')"
     title="Git Management"
   >
@@ -19,42 +19,6 @@ const emit = defineEmits(['click'])
 </template>
 
 <style scoped>
-.git-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 9px;
-  min-height: 32px;
-  border: 1px solid color-mix(in srgb, var(--glass-border) 70%, transparent);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--glass-bg) 36%, transparent);
-  color: var(--text-secondary);
-  font-size: 11px;
-  cursor: pointer;
-  backdrop-filter: blur(calc(var(--glass-blur) * 0.8)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.8)) saturate(var(--glass-saturate));
-  transition:
-    color var(--transition-fast),
-    background var(--transition-fast),
-    border-color var(--transition-fast),
-    box-shadow var(--transition-fast),
-    transform var(--transition-fast);
-  font-family: var(--font-sans);
-  white-space: nowrap;
-}
-
-.git-btn:hover {
-  background: var(--layer-active);
-  color: var(--accent);
-  border-color: var(--accent);
-  box-shadow: var(--shadow-sm);
-}
-
-.git-btn:active {
-  transform: scale(0.96);
-  transition-duration: 100ms;
-}
-
 .git-btn-label {
   font-weight: 500;
 }

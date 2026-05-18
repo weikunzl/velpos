@@ -220,7 +220,7 @@ class LarkAdapter(ImChannelAdapter):
         )
 
     async def complete_bind(
-        self, binding: ImBinding, params: dict,
+        self, binding: ImBinding, _params: dict,
     ) -> BindResult:
         return BindResult(
             status=BindingStatus.BOUND,

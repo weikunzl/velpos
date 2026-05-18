@@ -42,7 +42,7 @@ class OpenImAdapter(ImChannelAdapter):
 
     # ── Initialization ──
 
-    async def check_init_status(self, config: dict) -> bool:
+    async def check_init_status(self, _config: dict) -> bool:
         try:
             return self._im_gateway is not None
         except Exception:
@@ -63,7 +63,7 @@ class OpenImAdapter(ImChannelAdapter):
     # ── Binding lifecycle ──
 
     async def bind(
-        self, session_id: str, binding: ImBinding, params: dict,
+        self, session_id: str, binding: ImBinding, _params: dict,
     ) -> BindResult:
         im_user_id = binding.im_user_id or f"vp-session-{session_id}"
 
@@ -119,14 +119,14 @@ class OpenImAdapter(ImChannelAdapter):
                 "Failed to disconnect WS for %s", binding.im_user_id,
             )
 
-    async def send_message(self, binding: ImBinding, content: str, reply_context: dict | None = None) -> None:
+    async def send_message(self, binding: ImBinding, content: str, _reply_context: dict | None = None) -> None:
         await self._im_gateway.send_message(
             binding.im_user_id, binding.friend_user_id, content,
         )
 
     # ── Message lifecycle ──
 
-    async def start_listening(self, binding: ImBinding, on_message=None) -> None:
+    async def start_listening(self, binding: ImBinding, _on_message=None) -> None:
         try:
             if not self._im_ws_gateway.is_connected(binding.im_user_id):
                 await self._im_ws_gateway.connect(binding.im_user_id, binding.im_token)
@@ -141,7 +141,7 @@ class OpenImAdapter(ImChannelAdapter):
 
     # ── Routing context — OpenIM uses friend_user_id, not sender/group ──
 
-    def extract_routing_context(self, sender_id: str, group_id: str) -> dict[str, str]:
+    def extract_routing_context(self, _sender_id: str, _group_id: str) -> dict[str, str]:
         return {}
 
     def build_reply_context(self, binding: ImBinding) -> dict[str, str] | None:
@@ -154,23 +154,23 @@ class OpenImAdapter(ImChannelAdapter):
 class OpenImStubAdapter(ImChannelAdapter):
     """Stub adapter when OpenIM infrastructure is not configured."""
 
-    async def check_init_status(self, config: dict) -> bool:
+    async def check_init_status(self, _config: dict) -> bool:
         return False
 
-    async def initialize(self, params: dict) -> InitResult:
+    async def initialize(self, _params: dict) -> InitResult:
         return InitResult(
             status=ChannelInitStatus.ERROR,
             error_message="OpenIM not configured. Set IM_API_ADDR, IM_WS_ADDR, IM_ADMIN_SECRET, IM_ADMIN_USER_ID env vars.",
         )
 
-    async def bind(self, session_id: str, binding: ImBinding, params: dict) -> BindResult:
+    async def bind(self, _session_id: str, _binding: ImBinding, _params: dict) -> BindResult:
         raise ValueError("OpenIM not configured")
 
-    async def complete_bind(self, binding: ImBinding, params: dict) -> BindResult:
+    async def complete_bind(self, _binding: ImBinding, _params: dict) -> BindResult:
         raise ValueError("OpenIM not configured")
 
-    async def unbind(self, binding: ImBinding) -> None:
+    async def unbind(self, _binding: ImBinding) -> None:
         pass
 
-    async def send_message(self, binding: ImBinding, content: str, reply_context: dict | None = None) -> None:
+    async def send_message(self, _binding: ImBinding, _content: str, _reply_context: dict | None = None) -> None:
         pass

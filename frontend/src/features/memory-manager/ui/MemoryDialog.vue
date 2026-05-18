@@ -1,5 +1,5 @@
 <script setup>
-import { watch, computed, ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { watch, computed, ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { configuredMarked } from '@features/message-display'
 import { listWorkspaceFileHistory, readWorkspaceFileAtRef } from '@entities/project/api/projectApi'
 import { useMemoryManager } from '../model/useMemoryManager'
@@ -157,7 +157,7 @@ onMounted(() => {
   window.addEventListener('vp-memory-open-tab', handleOpenTab)
 })
 
-onUnmounted(() => {
+onBeforeUnmount(() => {
   window.removeEventListener('vp-memory-refresh', handleRefresh)
   window.removeEventListener('vp-memory-open-rule-draft', handleOpenRuleDraft)
   window.removeEventListener('vp-memory-open-tab', handleOpenTab)
@@ -250,7 +250,7 @@ function resetCompareState() {
   ruleDiffCursor.value = -1
 }
 
-import { splitLines, buildSideBySideDiff, createDiffRow } from '@shared/lib/diff'
+import { splitLines, buildSideBySideDiff } from '@shared/lib/diff'
 
 function formatRuleHistoryLabel(commit) {
   const shortHash = commit.short_hash || String(commit.hash || '').slice(0, 7)

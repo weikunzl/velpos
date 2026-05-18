@@ -230,10 +230,6 @@ function onBack() {
 function handleClose() {
   emit('close')
 }
-
-function handleOverlayClick(e) {
-  if (e.target === e.currentTarget) handleClose()
-}
 </script>
 
 <template>
@@ -242,7 +238,7 @@ function handleOverlayClick(e) {
       <div
         v-if="visible"
         class="dialog-overlay"
-        @click="handleOverlayClick"
+        @click.self="handleClose"
         role="dialog"
         aria-modal="true"
         aria-label="IM Integration"
@@ -464,16 +460,6 @@ function handleOverlayClick(e) {
   max-height: 60px;
 }
 
-.dialog-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--bg-overlay);
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
 .dialog {
   width: 440px;
   max-width: calc(100vw - 32px);
@@ -484,41 +470,6 @@ function handleOverlayClick(e) {
   box-shadow: var(--shadow-xl);
   display: flex;
   flex-direction: column;
-}
-
-.dialog-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.dialog-title {
-  font-weight: 600;
-  font-size: 16px;
-  color: var(--text-primary);
-}
-
-.close-btn {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 20px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.close-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
 }
 
 .error-banner {

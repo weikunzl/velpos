@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from application.memory.claude_md_revision_application_service import ClaudeMdRevisionApplicationService
 from domain.project.acl.plugin_manager import PluginManager
+from domain.project.model.project import Project
+from domain.project.repository.project_repository import ProjectRepository
 from domain.shared.business_exception import BusinessException
 from infr.agent.catalog import (
     AGENT_CATALOG,
@@ -27,7 +28,7 @@ class AgentApplicationService:
         self._plugin_manager = plugin_manager
         self._claude_md_revision_service = claude_md_revision_service
 
-    async def list_agents(self, language: str = "en") -> dict[str, Any]:
+    async def list_agents(self, language: str = "en") -> dict:
         name_key = f"name_{language}" if language in ("en", "zh") else "name_en"
         desc_key = f"description_{language}" if language in ("en", "zh") else "description_en"
 
@@ -52,7 +53,7 @@ class AgentApplicationService:
             })
         return {"categories": categories}
 
-    async def list_team_templates(self, language: str = "en", mode: str | None = None) -> dict[str, Any]:
+    async def list_team_templates(self, language: str = "en", mode: str | None = None) -> dict:
         return {"templates": list_team_templates(language, mode)}
 
     async def load_agent(
@@ -60,15 +61,15 @@ class AgentApplicationService:
         project_id: str,
         agent_id: str,
         language: str,
-        project_repository: Any,
-    ) -> Any:
+        project_repository: ProjectRepository,
+    ) -> Project:
         agent_meta = get_agent_by_id(agent_id)
         if not agent_meta:
-            raise ValueError(f"Unknown agent: {agent_id}")
+            raise BusinessException(f"Unknown agent: {agent_id}")
 
         project = await project_repository.find_by_id(project_id)
         if not project:
-            raise ValueError(f"Project not found: {project_id}")
+            raise BusinessException(f"Project not found: {project_id}")
 
         if project.is_agent_locked():
             raise BusinessException(
@@ -99,12 +100,12 @@ class AgentApplicationService:
     async def update_agent(
         self,
         project_id: str,
-        project_repository: Any,
-    ) -> Any:
+        project_repository: ProjectRepository,
+    ) -> Project:
         """Re-apply current agent's CLAUDE.md prompt and reinstall plugins."""
         project = await project_repository.find_by_id(project_id)
         if not project:
-            raise ValueError(f"Project not found: {project_id}")
+            raise BusinessException(f"Project not found: {project_id}")
 
         current_agent = project.get_current_agent()
         if not current_agent:
@@ -114,7 +115,7 @@ class AgentApplicationService:
         language = current_agent.get("language", "en")
         agent_meta = get_agent_by_id(agent_id)
         if not agent_meta:
-            raise ValueError(f"Unknown agent: {agent_id}")
+            raise BusinessException(f"Unknown agent: {agent_id}")
 
         project_dir = project.dir_path
 
@@ -135,11 +136,11 @@ class AgentApplicationService:
     async def unload_agent(
         self,
         project_id: str,
-        project_repository: Any,
-    ) -> Any:
+        project_repository: ProjectRepository,
+    ) -> Project:
         project = await project_repository.find_by_id(project_id)
         if not project:
-            raise ValueError(f"Project not found: {project_id}")
+            raise BusinessException(f"Project not found: {project_id}")
 
         if project.is_agent_locked():
             raise BusinessException(

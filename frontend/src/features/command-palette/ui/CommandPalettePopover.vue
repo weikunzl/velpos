@@ -1,5 +1,6 @@
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
+import { useClickOutside } from '@shared/lib/useClickOutside'
 
 const props = defineProps({
   visible: {
@@ -59,18 +60,8 @@ watch(() => props.searchQuery, () => {
   activeIndex.value = 0
 })
 
-function handleClickOutside(e) {
-  if (props.visible && popoverEl.value && !popoverEl.value.contains(e.target)) {
-    emit('close')
-  }
-}
-
-onMounted(() => {
-  document.addEventListener('mousedown', handleClickOutside)
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener('mousedown', handleClickOutside)
+useClickOutside(popoverEl, () => {
+  if (props.visible) emit('close')
 })
 
 function handleKeydown(e) {

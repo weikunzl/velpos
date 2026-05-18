@@ -167,7 +167,7 @@ class ClaudeAgentGateway(ABC):
         """
         ...
 
-    def cleanup_session(self, session_id: str) -> None:
+    async def cleanup_session(self, session_id: str) -> None:
         """Remove all tracked state for a session after full deletion.
 
         Args:

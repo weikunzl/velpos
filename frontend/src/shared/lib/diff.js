@@ -27,7 +27,7 @@ export function splitLines(content) {
   return (content || '').split('\n')
 }
 
-export function buildSequentialDiff(before, after) {
+function buildSequentialDiff(before, after) {
   const rows = []
   const max = Math.max(before.length, after.length)
   for (let index = 0; index < max; index += 1) {

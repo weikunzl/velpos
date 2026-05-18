@@ -106,12 +106,6 @@ async function copyPublicKey(publicKey, keyName) {
   }
 }
 
-function handleOverlayClick(e) {
-  if (e.target === e.currentTarget) {
-    emit('close')
-  }
-}
-
 watch(() => props.visible, (val) => {
   if (val) {
     loadData()
@@ -122,7 +116,7 @@ watch(() => props.visible, (val) => {
 
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="dialog-overlay" @click="handleOverlayClick">
+    <div v-if="visible" class="dialog-overlay" @click.self="$emit('close')">
       <div class="dialog">
         <div class="dialog-header">
           <h2>Git Management</h2>
@@ -258,14 +252,9 @@ watch(() => props.visible, (val) => {
 
 <style scoped>
 .dialog-overlay {
-  position: fixed;
-  inset: 0;
   background: var(--overlay-glass);
   backdrop-filter: blur(14px) saturate(120%);
   -webkit-backdrop-filter: blur(14px) saturate(120%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   z-index: 1000;
 }
 
@@ -284,13 +273,8 @@ watch(() => props.visible, (val) => {
 }
 
 .dialog-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
   border-bottom: 1px solid var(--glass-border);
   background: var(--layer-glass);
-  flex-shrink: 0;
 }
 
 .dialog-header h2 {
@@ -301,16 +285,7 @@ watch(() => props.visible, (val) => {
 }
 
 .close-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
   color: var(--text-secondary);
-  cursor: pointer;
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 

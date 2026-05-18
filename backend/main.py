@@ -8,6 +8,7 @@ load_dotenv()
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
 
@@ -343,9 +344,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Velpos", version="0.1.0", lifespan=lifespan)
 
-import os as _os
-
-_cors_origins = [o.strip() for o in _os.getenv("CORS_ALLOW_ORIGINS", "*").split(",")]
+_cors_origins = [o.strip() for o in os.getenv("CORS_ALLOW_ORIGINS", "*").split(",")]
 
 app.add_middleware(
     CORSMiddleware,
@@ -424,8 +423,6 @@ async def health():
 
 
 if __name__ == "__main__":
-    import os
-
     import uvicorn
 
     uvicorn.run(

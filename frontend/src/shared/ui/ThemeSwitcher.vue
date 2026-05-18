@@ -1,13 +1,14 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref } from 'vue'
 import { useTheme } from '@shared/lib/useTheme'
 import { useEyeCare } from '@shared/lib/useEyeCare'
+import { useClickOutside } from '@shared/lib/useClickOutside'
+import { useEscapeToClose } from '@shared/lib/useDialogManager'
 
 const { theme, setTheme } = useTheme()
 const { brightness, warmth, isActive: eyeCareActive, reset: resetEyeCare } = useEyeCare()
 
 const showPanel = ref(false)
-const panelRef = ref(null)
 const switcherRef = ref(null)
 
 const themeOptions = [
@@ -25,31 +26,11 @@ function handleThemeClick(opt) {
   }
 }
 
-function onClickOutside(e) {
-  if (
-    showPanel.value &&
-    panelRef.value && !panelRef.value.contains(e.target) &&
-    switcherRef.value && !switcherRef.value.contains(e.target)
-  ) {
-    showPanel.value = false
-  }
-}
-
-function onKeydown(e) {
-  if (e.key === 'Escape' && showPanel.value) {
-    showPanel.value = false
-  }
-}
-
-onMounted(() => {
-  document.addEventListener('mousedown', onClickOutside)
-  document.addEventListener('keydown', onKeydown)
+useClickOutside(switcherRef, () => {
+  if (showPanel.value) showPanel.value = false
 })
 
-onUnmounted(() => {
-  document.removeEventListener('mousedown', onClickOutside)
-  document.removeEventListener('keydown', onKeydown)
-})
+useEscapeToClose(() => showPanel.value, () => { showPanel.value = false })
 </script>
 
 <template>
@@ -91,7 +72,7 @@ onUnmounted(() => {
 
     <!-- Eye-care adjustment panel -->
     <Transition name="eyecare-panel">
-      <div v-if="showPanel" class="eyecare-panel" ref="panelRef">
+      <div v-if="showPanel" class="eyecare-panel">
         <div class="panel-row">
           <svg class="row-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>

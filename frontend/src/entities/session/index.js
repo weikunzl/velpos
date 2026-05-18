@@ -17,6 +17,5 @@ export {
   applyVbReviews,
 } from './api/sessionApi'
 export {
-  getSessionUsage,
   getProjectUsage,
 } from './api/usageApi'

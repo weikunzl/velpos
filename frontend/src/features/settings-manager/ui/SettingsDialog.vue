@@ -170,12 +170,6 @@ watch(() => settings.value, (val) => {
   }
 })
 
-function handleOverlayClick(e) {
-  if (e.target === e.currentTarget) {
-    emit('close')
-  }
-}
-
 function cancelAdd() {
   showAddForm.value = false
   addForm.value = { name: '', host: '', api_key: '', auth_env_name: 'ANTHROPIC_API_KEY', model_config: {} }
@@ -252,7 +246,7 @@ async function copyJsonPreview() {
 
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="dialog-overlay" @click="handleOverlayClick" role="dialog" aria-modal="true">
+    <div v-if="visible" class="dialog-overlay" @click.self="$emit('close')" role="dialog" aria-modal="true">
       <div class="dialog">
         <div class="dialog-header">
           <h2 class="dialog-title">Settings</h2>
@@ -600,15 +594,9 @@ async function copyJsonPreview() {
 
 <style scoped>
 .dialog-overlay {
-  position: fixed;
-  inset: 0;
   background: var(--overlay-glass);
   backdrop-filter: blur(14px) saturate(120%);
   -webkit-backdrop-filter: blur(14px) saturate(120%);
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .dialog {
@@ -626,34 +614,11 @@ async function copyJsonPreview() {
 }
 
 .dialog-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
   border-bottom: 1px solid var(--glass-border);
   background: var(--layer-glass);
-  flex-shrink: 0;
-}
-
-.dialog-title {
-  font-weight: 600;
-  font-size: 16px;
-  color: var(--text-primary);
-  margin: 0;
 }
 
 .close-btn {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  font-size: 20px;
-  color: var(--text-muted);
-  cursor: pointer;
-  border-radius: var(--radius-sm);
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 

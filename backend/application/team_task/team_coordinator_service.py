@@ -12,6 +12,7 @@ from domain.team_task.model.team_task_status import TeamTaskStatus
 from application.team_task.prompt_builder import build_worker_prompt
 from application.team_task.team_hooks import create_worker_hooks, NotifyImFn
 from application.team_task.trace_file_manager import TraceFileManager
+from domain.shared.business_exception import BusinessException
 
 if TYPE_CHECKING:
     from application.agent.agent_application_service import AgentApplicationService
@@ -84,19 +85,19 @@ class TeamCoordinatorService:
         """Dispatch a task to a team member. Blocks until the worker finishes."""
         project = await self._project_repo.find_by_id(main_project_id)
         if not project or project.project_type != "team":
-            raise ValueError(f"Project {main_project_id} is not a team project")
+            raise BusinessException(f"Project {main_project_id} is not a team project")
 
         config = project.team_config
         mode = config.get("mode", "delegation")
 
         member = self._find_member_by_role(config, target_role)
         if not member:
-            raise ValueError(f"No team member with role '{target_role}' found")
+            raise BusinessException(f"No team member with role '{target_role}' found")
 
         target_project_id = member.get("project_id", "")
         target_project = await self._project_repo.find_by_id(target_project_id)
         if not target_project:
-            raise ValueError(f"Target project '{target_project_id}' not found")
+            raise BusinessException(f"Target project '{target_project_id}' not found")
 
         # Load agent for this step if configured
         step_agent_id = member.get("agent_id", "")
@@ -361,7 +362,7 @@ class TeamCoordinatorService:
         """Dispatch multiple tasks in parallel with semaphore-limited concurrency."""
         project = await self._project_repo.find_by_id(main_project_id)
         if not project or project.project_type != "team":
-            raise ValueError(f"Project {main_project_id} is not a team project")
+            raise BusinessException(f"Project {main_project_id} is not a team project")
 
         config = project.team_config
         max_concurrent = config.get("max_concurrent", 2)
@@ -464,15 +465,15 @@ class TeamCoordinatorService:
         """
         session = await self._session_repo.find_by_id(worker_session_id)
         if not session or not session.team_task_id:
-            raise ValueError("Worker session has no associated team task")
+            raise BusinessException("Worker session has no associated team task")
 
         task = await self._task_repo.find_by_id(session.team_task_id)
         if not task:
-            raise ValueError("Team task not found for worker")
+            raise BusinessException("Team task not found for worker")
 
         project = await self._project_repo.find_by_id(task.main_project_id)
         if not project:
-            raise ValueError("Team project not found")
+            raise BusinessException("Team project not found")
 
         config = project.team_config
         max_depth = config.get("max_depth", 5)
@@ -623,7 +624,7 @@ class TeamCoordinatorService:
                     except Exception:
                         pass
                     await self._session_repo.remove(task.worker_session_id)
-                    self._gateway.cleanup_session(task.worker_session_id)
+                    await self._gateway.cleanup_session(task.worker_session_id)
                     deleted_ids.append(task.worker_session_id)
             await self._task_repo.remove(task.task_id)
         return deleted_ids

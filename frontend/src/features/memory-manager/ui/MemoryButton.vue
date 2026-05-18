@@ -7,7 +7,7 @@ const emit = defineEmits(['click'])
 
 <template>
   <button
-    class="toolbar-btn"
+    class="glass-btn glass-btn--accent toolbar-btn"
     :disabled="disabled"
     data-tooltip="Rule"
     title="Project Rules — View and edit CLAUDE.md and rules"
@@ -25,41 +25,8 @@ const emit = defineEmits(['click'])
 <style scoped>
 .toolbar-btn {
   position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent);
-  color: var(--text-secondary);
-  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border));
   padding: 6px 8px;
   min-height: 30px;
-  border-radius: var(--radius-md);
-  font-size: 11px;
-  cursor: pointer;
-  backdrop-filter: blur(calc(var(--glass-blur) * 0.8)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.8)) saturate(var(--glass-saturate));
-  transition:
-    color var(--transition-fast),
-    background var(--transition-fast),
-    border-color var(--transition-fast),
-    box-shadow var(--transition-fast),
-    transform var(--transition-fast);
-  font-family: var(--font-sans);
-  white-space: nowrap;
-}
-.toolbar-btn:hover:not(:disabled) {
-  color: var(--accent);
-  background: var(--layer-active);
-  border-color: var(--accent);
-  box-shadow: var(--shadow-sm);
-}
-.toolbar-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.toolbar-btn:active:not(:disabled) {
-  transform: scale(0.96);
-  transition-duration: 100ms;
 }
 .toolbar-btn[data-tooltip]::after {
   content: attr(data-tooltip);

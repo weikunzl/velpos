@@ -114,10 +114,6 @@ class TeamTask:
         return self._cost_usd
 
     @property
-    def is_completed(self) -> bool:
-        return self._status == TeamTaskStatus.COMPLETED
-
-    @property
     def is_running(self) -> bool:
         return self._status in (TeamTaskStatus.RUNNING, TeamTaskStatus.WAITING_FOR_HELP)
 

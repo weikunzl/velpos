@@ -249,7 +249,6 @@ async function handleCreate() {
 }
 
 function handleCancel() { emit('cancel') }
-function handleOverlayClick(e) { if (e.target === e.currentTarget) handleCancel() }
 
 onMounted(() => {
   loadTemplates()
@@ -258,7 +257,7 @@ onMounted(() => {
 
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="dialog-overlay" @click="handleOverlayClick" role="dialog" aria-modal="true">
+    <div v-if="visible" class="dialog-overlay" @click.self="handleCancel" role="dialog" aria-modal="true">
       <div class="dialog">
         <header class="dialog-header">
           <div>
@@ -471,13 +470,6 @@ onMounted(() => {
 
 <style scoped>
 .dialog-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--bg-overlay);
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   padding: 16px;
 }
 
@@ -495,20 +487,9 @@ onMounted(() => {
 }
 
 .dialog-header {
-  display: flex;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 16px;
   padding: 18px 22px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.dialog-title {
-  font-weight: 600;
-  font-size: 16px;
-  color: var(--text-primary);
-  margin: 0;
 }
 
 .dialog-subtitle {
@@ -520,18 +501,7 @@ onMounted(() => {
 .close-btn {
   width: 30px;
   height: 30px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 20px;
-  cursor: pointer;
   transition: background var(--transition-fast), color var(--transition-fast);
-}
-
-.close-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
 }
 
 .dialog-body {

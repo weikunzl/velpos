@@ -1,4 +1,4 @@
-import { onMounted, onUnmounted, reactive } from 'vue'
+import { onMounted, onBeforeUnmount, reactive } from 'vue'
 
 /**
  * Global hotkey registry
@@ -156,7 +156,7 @@ export function useGlobalHotkeys({ keys, handler, priority = 0, condition = null
     registerHandler()
   })
 
-  onUnmounted(() => {
+  onBeforeUnmount(() => {
     unregisterHandler()
     // Remove global listener if no more handlers
     if (hotkeyRegistry.size === 0) {

@@ -601,15 +601,6 @@ async def get_session_run_timeline_service(
     )
 
 
-async def get_session_timeline_event_service(
-    db_session: AsyncSession = Depends(get_async_session),
-) -> SessionTimelineEventService:
-    return SessionTimelineEventService(
-        repository=SessionTimelineEventRepositoryImpl(db_session),
-        connection_manager=_connection_manager,
-    )
-
-
 async def get_evolution_application_service(
     db_session: AsyncSession = Depends(get_async_session),
 ) -> EvolutionApplicationService:

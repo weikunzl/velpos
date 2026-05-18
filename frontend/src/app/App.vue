@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, watch, provide, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, computed, watch, provide, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { applyVbReviews, fetchSessionTimelineEvents, useSession } from '@entities/session'
 import { useProject } from '@entities/project'
 import { useImBinding } from '@features/im-binding'
@@ -18,6 +18,7 @@ import { WorkspaceButton, WorkspacePanel } from '@features/workspace'
 import { SchedulerDialog } from '@features/scheduler'
 import ThemeSwitcher from '@shared/ui/ThemeSwitcher.vue'
 import GlobalShortcutInterceptor from '@shared/ui/GlobalShortcutInterceptor.vue'
+import AppLogo from '@shared/ui/AppLogo.vue'
 import { useGlobalHotkeys } from '@shared/lib/useGlobalHotkeys'
 import { useHotkeyHint } from '@shared/lib/useHotkeyHint'
 
@@ -44,7 +45,7 @@ const {
   setRestoredPrompt,
 } = useSession()
 
-const { projects } = useProject()
+const { projects, currentProject } = useProject()
 
 const {
   loading,
@@ -82,11 +83,6 @@ const scheduleCounts = ref({})
 let globalEventConnection = null
 const sidebarRef = ref(null)
 const { handleTeamEvent, handleWorkerSessionEvent } = useTeamRuntime()
-const currentProject = computed(() => {
-  const projectId = session.value?.project_id
-  if (!projectId) return null
-  return projects.value.find(project => project.id === projectId) || null
-})
 const vbRunning = ref(false)
 const vbMessage = ref('')
 let vbRefresh = null
@@ -530,7 +526,7 @@ onMounted(async () => {
   startHotkeyHintListening()
 })
 
-onUnmounted(() => {
+onBeforeUnmount(() => {
   // Clean up event listener
   window.removeEventListener('vp-session-imported', handleSessionImported)
   window.removeEventListener('vp-schedules-changed', loadScheduleCounts)
@@ -593,35 +589,7 @@ useGlobalHotkeys({
     <template v-if="!ready && !initError">
       <header class="app-header">
         <div class="header-left">
-          <div class="logo">
-            <svg class="logo-svg" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <linearGradient id="logo-fl" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stop-color="#4a9eff"/>
-                  <stop offset="100%" stop-color="#a78bfa"/>
-                </linearGradient>
-                <linearGradient id="logo-fr" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stop-color="#a78bfa"/>
-                  <stop offset="100%" stop-color="#c084fc"/>
-                </linearGradient>
-                <linearGradient id="logo-fb" x1="0%" y1="100%" x2="100%" y2="0%">
-                  <stop offset="0%" stop-color="#3b5998"/>
-                  <stop offset="100%" stop-color="#7c3aed"/>
-                </linearGradient>
-                <linearGradient id="logo-ft" x1="50%" y1="0%" x2="50%" y2="100%">
-                  <stop offset="0%" stop-color="#c4b5fd"/>
-                  <stop offset="100%" stop-color="#a78bfa"/>
-                </linearGradient>
-              </defs>
-              <polygon fill="url(#logo-fl)" points="256,56 108,200 148,400 256,296"/>
-              <polygon fill="url(#logo-fr)" points="256,56 404,200 364,400 256,296"/>
-              <polygon fill="url(#logo-fb)" points="148,400 256,456 256,296"/>
-              <polygon fill="#7c3aed" opacity="0.8" points="364,400 256,456 256,296"/>
-              <polygon fill="url(#logo-ft)" opacity="0.5" points="256,56 200,148 256,180 312,148"/>
-              <line x1="256" y1="80" x2="256" y2="440" stroke="#67e8f9" stroke-width="3" opacity="0.9"/>
-            </svg>
-            <span class="logo-text">Velpos</span>
-          </div>
+          <AppLogo prefix="logo" />
         </div>
         <div class="header-right">
           <div class="skel-circle"></div>
@@ -678,35 +646,7 @@ useGlobalHotkeys({
               <line x1="3" y1="18" x2="21" y2="18"></line>
             </svg>
           </button>
-          <div class="logo">
-            <svg class="logo-svg" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <linearGradient id="hdr-fl" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stop-color="#4a9eff"/>
-                  <stop offset="100%" stop-color="#a78bfa"/>
-                </linearGradient>
-                <linearGradient id="hdr-fr" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stop-color="#a78bfa"/>
-                  <stop offset="100%" stop-color="#c084fc"/>
-                </linearGradient>
-                <linearGradient id="hdr-fb" x1="0%" y1="100%" x2="100%" y2="0%">
-                  <stop offset="0%" stop-color="#3b5998"/>
-                  <stop offset="100%" stop-color="#7c3aed"/>
-                </linearGradient>
-                <linearGradient id="hdr-ft" x1="50%" y1="0%" x2="50%" y2="100%">
-                  <stop offset="0%" stop-color="#c4b5fd"/>
-                  <stop offset="100%" stop-color="#a78bfa"/>
-                </linearGradient>
-              </defs>
-              <polygon fill="url(#hdr-fl)" points="256,56 108,200 148,400 256,296"/>
-              <polygon fill="url(#hdr-fr)" points="256,56 404,200 364,400 256,296"/>
-              <polygon fill="url(#hdr-fb)" points="148,400 256,456 256,296"/>
-              <polygon fill="#7c3aed" opacity="0.8" points="364,400 256,456 256,296"/>
-              <polygon fill="url(#hdr-ft)" opacity="0.5" points="256,56 200,148 256,180 312,148"/>
-              <line x1="256" y1="80" x2="256" y2="440" stroke="#67e8f9" stroke-width="3" opacity="0.9"/>
-            </svg>
-            <span class="logo-text">Velpos</span>
-          </div>
+          <AppLogo prefix="hdr" />
         </div>
         <div class="header-right">
           <NotificationBell @navigate="handleNotificationNavigate" />
@@ -870,25 +810,6 @@ useGlobalHotkeys({
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.logo-svg {
-  width: 26px;
-  height: 26px;
-  flex-shrink: 0;
-}
-
-.logo-text {
-  font-weight: 600;
-  font-size: 15px;
-  color: var(--text-primary);
-  letter-spacing: -0.3px;
 }
 
 .app-body {
@@ -1188,11 +1109,6 @@ useGlobalHotkeys({
 /* ===================================================================
    SKELETON — Layout-accurate loading state
    =================================================================== */
-@keyframes skel-pulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 0.8; }
-}
-
 .skel-bar {
   background: var(--bg-hover);
   border-radius: 4px;

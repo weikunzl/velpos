@@ -1,5 +1,6 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, nextTick } from 'vue'
+import { useClickOutside } from '@shared/lib/useClickOutside'
 
 const props = defineProps({
   modelValue: {
@@ -75,19 +76,7 @@ function select(value) {
   isOpen.value = false
 }
 
-function onClickOutside(e) {
-  if (wrapperRef.value && !wrapperRef.value.contains(e.target)) {
-    isOpen.value = false
-  }
-}
-
-onMounted(() => {
-  document.addEventListener('click', onClickOutside, true)
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener('click', onClickOutside, true)
-})
+useClickOutside(wrapperRef, () => { isOpen.value = false }, { event: 'click' })
 </script>
 
 <template>
