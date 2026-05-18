@@ -96,7 +96,7 @@ async def terminal_websocket_endpoint(
         pass
     finally:
         output_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
+        with contextlib.suppress(Exception):
             await output_task
         await terminal_service.close_pty(terminal_id)
 
@@ -336,10 +336,13 @@ async def websocket_endpoint(
                             else:
                                 await bg_service.rewind_to_message(session_id, int(target_message_index))
                         except Exception as e:
-                            await websocket.send_json({
-                                "event": "error",
-                                "message": str(e),
-                            })
+                            try:
+                                await websocket.send_json({
+                                    "event": "error",
+                                    "message": str(e),
+                                })
+                            except Exception:
+                                pass
                         finally:
                             await bg_service.close()
 
