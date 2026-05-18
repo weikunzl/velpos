@@ -94,11 +94,13 @@ async function handlePickDirectory() {
   picking.value = true
   try {
     const result = await pickProjectDirectory()
+    if (!props.visible) return
     if (result?.dir_path) {
       mode.value = 'local'
       projectPath.value = result.dir_path
     }
   } catch (err) {
+    if (!props.visible) return
     pickerError.value = err.message || 'Failed to pick directory'
   } finally {
     picking.value = false

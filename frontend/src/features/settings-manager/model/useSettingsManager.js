@@ -19,18 +19,22 @@ export function useSettingsManager() {
   // Fetched models cache: keyed by profileId or '_add' for the add form
   const fetchedModels = ref({})
   const fetchingModels = ref(null) // profileId currently fetching
+  let _loadSeq = 0
 
   async function loadData() {
     loading.value = true
     error.value = null
+    const seq = ++_loadSeq
     try {
       const [settingsData, profilesData] = await Promise.all([
         getSettings(),
         listChannelProfiles(),
       ])
+      if (seq !== _loadSeq) return
       settings.value = settingsData
       profiles.value = profilesData.profiles || []
     } catch (err) {
+      if (seq !== _loadSeq) return
       error.value = err.message || 'Failed to load data'
     } finally {
       loading.value = false

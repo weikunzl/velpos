@@ -50,6 +50,7 @@ class WeixinAdapter(ImChannelAdapter):
         self._poll_tasks: dict[str, asyncio.Task] = {}
         self._on_messages: dict[str, Any] = {}
         self._stop_events: dict[str, asyncio.Event] = {}
+        self._listen_lock = asyncio.Lock()
 
     # ── Initialization ──
 
@@ -209,46 +210,52 @@ class WeixinAdapter(ImChannelAdapter):
         """
         channel_id = binding.channel_id
 
-        # Stop existing poll loop for this specific channel if any
-        existing_task = self._poll_tasks.get(channel_id)
-        if existing_task and not existing_task.done():
-            logger.info(
-                "[WeChat-adapter] Stopping existing poll loop for channel=%s before restart",
-                channel_id,
-            )
-            stop_evt = self._stop_events.get(channel_id)
-            if stop_evt:
-                stop_evt.set()
-            existing_task.cancel()
-            try:
-                await existing_task
-            except (asyncio.CancelledError, Exception):
-                pass
+        async with self._listen_lock:
+            # Stop existing poll loop for this specific channel if any
+            existing_task = self._poll_tasks.get(channel_id)
+            if existing_task and not existing_task.done():
+                logger.info(
+                    "[WeChat-adapter] Stopping existing poll loop for channel=%s before restart",
+                    channel_id,
+                )
+                stop_evt = self._stop_events.get(channel_id)
+                if stop_evt:
+                    stop_evt.set()
+                existing_task.cancel()
+                try:
+                    await existing_task
+                except (asyncio.CancelledError, Exception):
+                    pass
 
-        self._on_messages[channel_id] = on_message
-        self._stop_events[channel_id] = asyncio.Event()
-        logger.info(
-            "[WeChat-adapter] Starting poll loop for session=%s channel=%s",
-            binding.session_id, channel_id,
-        )
-        self._poll_tasks[channel_id] = safe_create_task(
-            self._run_poll_loop(binding),
-        )
+            self._on_messages[channel_id] = on_message
+            self._stop_events[channel_id] = asyncio.Event()
+            logger.info(
+                "[WeChat-adapter] Starting poll loop for session=%s channel=%s",
+                binding.session_id, channel_id,
+            )
+            self._poll_tasks[channel_id] = safe_create_task(
+                self._run_poll_loop(binding),
+            )
 
     async def stop_listening(self, binding: ImBinding) -> None:
         """Stop the long-poll loop for a specific channel."""
         channel_id = binding.channel_id
         logger.info("[WeChat-adapter] Stopping poll loop for channel=%s", channel_id)
 
-        stop_evt = self._stop_events.pop(channel_id, None)
-        if stop_evt:
-            stop_evt.set()
+        async with self._listen_lock:
+            stop_evt = self._stop_events.pop(channel_id, None)
+            if stop_evt:
+                stop_evt.set()
 
-        task = self._poll_tasks.pop(channel_id, None)
-        if task and not task.done():
-            task.cancel()
+            task = self._poll_tasks.pop(channel_id, None)
+            if task and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):
+                    pass
 
-        self._on_messages.pop(channel_id, None)
+            self._on_messages.pop(channel_id, None)
 
     async def _run_poll_loop(self, binding: ImBinding) -> None:
         """Long-poll iLink getupdates and dispatch messages for one channel."""
