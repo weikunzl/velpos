@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, nextTick, computed } from 'vue'
+import { ref, watch, nextTick, computed, onBeforeUnmount } from 'vue'
 import QRCode from 'qrcode'
 import { useImBinding } from '../model/useImBinding'
 import ChannelPicker from './ChannelPicker.vue'
@@ -26,8 +26,13 @@ const emit = defineEmits(['close', 'prompt', 'navigate-session'])
 
 useEscapeToClose(() => props.visible, () => emit('close'))
 
+let _closeTimer = null
 function scheduleClose() {
-  setTimeout(() => emit('close'), 600)
+  if (_closeTimer) clearTimeout(_closeTimer)
+  _closeTimer = setTimeout(() => {
+    _closeTimer = null
+    emit('close')
+  }, 600)
 }
 
 const {
@@ -230,6 +235,10 @@ function onBack() {
 function handleClose() {
   emit('close')
 }
+
+onBeforeUnmount(() => {
+  if (_closeTimer) clearTimeout(_closeTimer)
+})
 </script>
 
 <template>

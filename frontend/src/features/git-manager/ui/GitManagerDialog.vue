@@ -34,20 +34,24 @@ const genKeyType = ref('ed25519')
 const genComment = ref('')
 const copiedKey = ref('')
 const { set: setTimer } = useTimeout()
+let _loadDataSeq = 0
 
 async function loadData() {
   loading.value = true
   error.value = ''
   configSaved.value = false
+  const seq = ++_loadDataSeq
   try {
     const [config, keys] = await Promise.all([
       getGitConfig(),
       listSshKeys(),
     ])
+    if (seq !== _loadDataSeq) return
     userName.value = config.user_name || ''
     userEmail.value = config.user_email || ''
     sshKeys.value = keys.keys || []
   } catch (e) {
+    if (seq !== _loadDataSeq) return
     error.value = e.message || 'Failed to load git config'
   } finally {
     loading.value = false

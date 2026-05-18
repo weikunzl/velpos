@@ -241,6 +241,7 @@ async function handleCreate() {
 
   try {
     const project = await createTeamProject(teamName.value.trim(), dirPath.value.trim(), config)
+    creating.value = false
     emit('created', project)
   } catch (err) {
     error.value = err.message || 'Failed to create team project'

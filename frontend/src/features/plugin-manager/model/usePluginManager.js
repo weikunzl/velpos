@@ -6,15 +6,19 @@ export function usePluginManager() {
   const loading = ref(false)
   const operating = ref(null) // plugin key currently being operated on
   const error = ref(null)
+  let _loadSeq = 0
 
   async function loadPlugins(projectDir) {
     if (!projectDir) return
     loading.value = true
     error.value = null
+    const seq = ++_loadSeq
     try {
       const data = await listPlugins(projectDir)
+      if (seq !== _loadSeq) return
       plugins.value = data.plugins || []
     } catch (e) {
+      if (seq !== _loadSeq) return
       error.value = e.message
     } finally {
       loading.value = false

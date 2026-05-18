@@ -7,15 +7,19 @@ const loading = ref(false)
 const operating = ref(false)
 const error = ref(null)
 const language = ref(localStorage.getItem('pf_agent_lang') || 'zh')
+let _fetchSeq = 0
 
 export function useAgentManager() {
   async function fetchAgents() {
     loading.value = true
     error.value = null
+    const seq = ++_fetchSeq
     try {
       const data = await listAgents(language.value)
+      if (seq !== _fetchSeq) return
       categories.value = data.categories || []
     } catch (e) {
+      if (seq !== _fetchSeq) return
       error.value = e.message
     } finally {
       loading.value = false
