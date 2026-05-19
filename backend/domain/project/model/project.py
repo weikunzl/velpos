@@ -111,9 +111,6 @@ class Project:
     # Multi-plugin accessors
     # ------------------------------------------------------------------
 
-    def has_plugin(self, plugin_type: PluginType) -> bool:
-        return plugin_type.value in self._plugins
-
     def get_plugin_init_status(self, plugin_type: PluginType) -> PluginInitStatus:
         plugin = self._plugins.get(plugin_type.value)
         if not plugin:

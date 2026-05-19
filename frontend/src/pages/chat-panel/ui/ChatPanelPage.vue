@@ -214,6 +214,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointerup', stopVideoDrag)
   stopVoiceRecording()
   stopCapture()
+  clearTimeout(pendingSendTimer)
 })
 
 function handleCompact() {

@@ -1,5 +1,6 @@
 <script setup>
 import { useNotifications } from '../model/useNotifications'
+import { formatRelativeTime } from '@shared/lib/formatTime'
 
 const emit = defineEmits(['navigate', 'close'])
 
@@ -9,13 +10,6 @@ function handleClick(notification) {
   markAsRead(notification.id)
   emit('navigate', notification.sessionId)
   emit('close')
-}
-
-function formatTime(ts) {
-  const diff = Date.now() - ts
-  if (diff < 60_000) return 'just now'
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
-  return `${Math.floor(diff / 3_600_000)}h ago`
 }
 </script>
 
@@ -55,7 +49,7 @@ function formatTime(ts) {
             <span class="session-name">{{ n.sessionName }}</span>
             <span v-if="n.projectName" class="project-name">{{ n.projectName }}</span>
           </div>
-          <div class="notification-time">{{ formatTime(n.timestamp) }}</div>
+          <div class="notification-time">{{ formatRelativeTime(n.timestamp) }}</div>
         </div>
       </div>
     </div>

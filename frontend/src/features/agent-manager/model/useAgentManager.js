@@ -26,12 +26,11 @@ export function useAgentManager() {
     }
   }
 
-  async function handleLoad(projectId, agentId, sessionId = '') {
+  async function withOperating(fn) {
     operating.value = true
     error.value = null
     try {
-      const project = await loadAgent(projectId, agentId, language.value, sessionId)
-      return project
+      return await fn()
     } catch (e) {
       error.value = e.message
       return null
@@ -40,32 +39,16 @@ export function useAgentManager() {
     }
   }
 
-  async function handleUnload(projectId, sessionId = '') {
-    operating.value = true
-    error.value = null
-    try {
-      const project = await unloadAgent(projectId, sessionId)
-      return project
-    } catch (e) {
-      error.value = e.message
-      return null
-    } finally {
-      operating.value = false
-    }
+  function handleLoad(projectId, agentId, sessionId = '') {
+    return withOperating(() => loadAgent(projectId, agentId, language.value, sessionId))
   }
 
-  async function handleUpdate(projectId) {
-    operating.value = true
-    error.value = null
-    try {
-      const project = await updateAgent(projectId)
-      return project
-    } catch (e) {
-      error.value = e.message
-      return null
-    } finally {
-      operating.value = false
-    }
+  function handleUnload(projectId, sessionId = '') {
+    return withOperating(() => unloadAgent(projectId, sessionId))
+  }
+
+  function handleUpdate(projectId) {
+    return withOperating(() => updateAgent(projectId))
   }
 
   function setLanguage(lang) {

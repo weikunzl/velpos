@@ -1,6 +1,6 @@
 <script setup>
 import { ref, shallowRef, watch, onMounted, nextTick, inject } from 'vue'
-import { configuredMarked } from '../lib/markdownConfig'
+import { cachedParse } from '../lib/markdownConfig'
 import { formatFileSize } from '@shared/lib/textParsers'
 import { openPath } from '@features/terminal'
 import AssistantBlock from './AssistantBlock.vue'
@@ -56,25 +56,6 @@ function handleUserMarkerClick() {
   sel.removeAllRanges()
   sel.addRange(range)
   isUserMsgSelected.value = true
-}
-
-// Markdown parse cache: keyed by text content to avoid re-parsing unchanged blocks
-const _mdCache = new Map()
-function cachedParse(text) {
-  if (!text) return ''
-  const cached = _mdCache.get(text)
-  if (cached) return cached
-  const html = configuredMarked(text)
-  if (_mdCache.size >= 300) {
-    let count = 0
-    const half = Math.floor(_mdCache.size / 2)
-    for (const k of _mdCache.keys()) {
-      if (count++ >= half) break
-      _mdCache.delete(k)
-    }
-  }
-  _mdCache.set(text, html)
-  return html
 }
 
 const renderedBlocks = shallowRef([])

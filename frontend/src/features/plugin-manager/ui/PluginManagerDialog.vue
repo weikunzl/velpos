@@ -2,20 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { usePluginManager } from '../model/usePluginManager'
 import { useEscapeToClose } from '@shared/lib/useDialogManager'
-
-function formatRelativeTime(isoStr) {
-  if (!isoStr) return ''
-  const d = new Date(isoStr)
-  const now = new Date()
-  const diffMin = Math.floor((now - d) / 60000)
-  if (diffMin < 1) return 'just now'
-  if (diffMin < 60) return `${diffMin}m ago`
-  const diffHr = Math.floor(diffMin / 60)
-  if (diffHr < 24) return `${diffHr}h ago`
-  const diffDay = Math.floor(diffHr / 24)
-  if (diffDay < 7) return `${diffDay}d ago`
-  return d.toLocaleDateString()
-}
+import { formatRelativeTime } from '@shared/lib/formatTime'
 
 const props = defineProps({
   visible: {

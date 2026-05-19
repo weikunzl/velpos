@@ -1,15 +1,10 @@
 import { onMounted, onBeforeUnmount, reactive } from 'vue'
 
-/**
- * Global hotkey registry
- * Allows components to register hotkeys with priority
- * Local (component-level) hotkeys take precedence over global ones
- */
 const hotkeyRegistry = reactive(new Map())
+let _listenerRefCount = 0
 
 /**
  * Normalize key combination to a standardized string
- * Examples: 'Ctrl+K', 'Cmd+K', 'Escape', 'Ctrl+Shift+K'
  */
 function normalizeKeyCombo(event) {
   const parts = []
@@ -37,30 +32,40 @@ function normalizeKeyCombo(event) {
   return parts.join('+')
 }
 
-/**
- * Generate a unique ID for hotkey handlers
- */
 function generateHotkeyId() {
   return `hotkey_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 }
 
 /**
- * Normalize hotkey string to standard format
+ * Normalize hotkey string to standard format and sort modifier order
  */
 function normalizeHotkeyString(key) {
-  return key
-    .replace(/ctrl\+/gi, 'Ctrl+')
-    .replace(/cmd\+/gi, 'Cmd+')
-    .replace(/meta\+/gi, 'Cmd+')
-    .replace(/shift\+/gi, 'Shift+')
-    .replace(/alt\+/gi, 'Alt+')
-    .replace(/option\+/gi, 'Alt+') // Mac上的Option键映射为Alt
+  const parts = key.split('+').map(p => p.trim())
+  const modifiers = []
+  let mainKey = ''
+  const modOrder = { 'ctrl': 0, 'cmd': 1, 'meta': 1, 'shift': 2, 'alt': 3, 'option': 3 }
+  const modNames = { 'ctrl': 'Ctrl', 'cmd': 'Cmd', 'meta': 'Cmd', 'shift': 'Shift', 'alt': 'Alt', 'option': 'Alt' }
+
+  for (const p of parts) {
+    const lower = p.toLowerCase()
+    if (lower in modOrder) {
+      modifiers.push({ order: modOrder[lower], name: modNames[lower] })
+    } else {
+      mainKey = p.length === 1 ? p.toUpperCase() : p
+    }
+  }
+
+  modifiers.sort((a, b) => a.order - b.order)
+  const seen = new Set()
+  const uniqueMods = modifiers.filter(m => {
+    if (seen.has(m.name)) return false
+    seen.add(m.name)
+    return true
+  })
+
+  return [...uniqueMods.map(m => m.name), mainKey].filter(Boolean).join('+')
 }
 
-/**
- * Global hotkey handler
- * Processes keyboard events and dispatches to registered handlers
- */
 function handleGlobalKeydown(event) {
   const combo = normalizeKeyCombo(event)
 
@@ -95,15 +100,6 @@ function handleGlobalKeydown(event) {
   }
 }
 
-/**
- * Composable for registering global hotkeys
- * @param {Object} options - Hotkey configuration
- * @param {string|string[]} options.keys - Key combination(s) to listen for
- * @param {Function} options.handler - Callback function when hotkey is triggered
- * @param {number} options.priority - Handler priority (default: 0, higher values take precedence)
- * @param {Function} options.condition - Optional function to determine if hotkey should be active
- * @returns {Object} - Control object with unregister method
- */
 export function useGlobalHotkeys({ keys, handler, priority = 0, condition = null }) {
   let keyList = Array.isArray(keys) ? keys : [keys]
   const handlerIds = []
@@ -149,8 +145,7 @@ export function useGlobalHotkeys({ keys, handler, priority = 0, condition = null
   }
 
   onMounted(() => {
-    // Initialize global listener if not already present
-    if (hotkeyRegistry.size === 0) {
+    if (_listenerRefCount++ === 0) {
       window.addEventListener('keydown', handleGlobalKeydown)
     }
     registerHandler()
@@ -158,8 +153,7 @@ export function useGlobalHotkeys({ keys, handler, priority = 0, condition = null
 
   onBeforeUnmount(() => {
     unregisterHandler()
-    // Remove global listener if no more handlers
-    if (hotkeyRegistry.size === 0) {
+    if (--_listenerRefCount === 0) {
       window.removeEventListener('keydown', handleGlobalKeydown)
     }
   })

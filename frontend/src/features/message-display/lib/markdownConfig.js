@@ -123,3 +123,23 @@ export function configuredMarked(text) {
     ALLOW_DATA_ATTR: true
   })
 }
+
+const _mdCache = new Map()
+const MD_CACHE_MAX = 300
+
+export function cachedParse(text) {
+  if (!text) return ''
+  const cached = _mdCache.get(text)
+  if (cached) return cached
+  const html = configuredMarked(text)
+  if (_mdCache.size >= MD_CACHE_MAX) {
+    let count = 0
+    const half = Math.floor(_mdCache.size / 2)
+    for (const k of _mdCache.keys()) {
+      if (count++ >= half) break
+      _mdCache.delete(k)
+    }
+  }
+  _mdCache.set(text, html)
+  return html
+}

@@ -40,10 +40,6 @@ class TraceFileManager:
                 cls._locks.pop(trace_id, None)
 
     @staticmethod
-    def trace_dir(project_dir: str) -> str:
-        return os.path.join(project_dir, ".velpos", "traces")
-
-    @staticmethod
     def trace_path(project_dir: str, trace_id: str) -> str:
         return os.path.join(project_dir, ".velpos", "traces", f"{trace_id}.json")
 

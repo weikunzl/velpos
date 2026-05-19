@@ -25,11 +25,11 @@ export function usePluginManager() {
     }
   }
 
-  async function handleInstall(pluginKey, projectDir) {
+  async function withPluginOp(pluginKey, apiFn, projectDir) {
     operating.value = pluginKey
     error.value = null
     try {
-      await installPlugin(pluginKey, projectDir)
+      await apiFn(pluginKey, projectDir)
       await loadPlugins(projectDir)
     } catch (e) {
       error.value = e.message
@@ -38,17 +38,12 @@ export function usePluginManager() {
     }
   }
 
-  async function handleUninstall(pluginKey, projectDir) {
-    operating.value = pluginKey
-    error.value = null
-    try {
-      await uninstallPlugin(pluginKey, projectDir)
-      await loadPlugins(projectDir)
-    } catch (e) {
-      error.value = e.message
-    } finally {
-      operating.value = null
-    }
+  function handleInstall(pluginKey, projectDir) {
+    return withPluginOp(pluginKey, installPlugin, projectDir)
+  }
+
+  function handleUninstall(pluginKey, projectDir) {
+    return withPluginOp(pluginKey, uninstallPlugin, projectDir)
   }
 
   return {
