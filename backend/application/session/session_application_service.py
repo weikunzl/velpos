@@ -1816,19 +1816,7 @@ class SessionApplicationService:
                         )
 
             # Broadcast rewind: full session state + messages + original prompt
-            all_messages = [
-                {"type": msg.message_type.value, "content": msg.content}
-                for msg in session.messages
-            ]
-            await self._connection_manager.broadcast(
-                session_id,
-                {
-                    "event": "cancel_rewind",
-                    "prompt": prompt,
-                    "session": self._session_to_dict(session),
-                    "messages": all_messages,
-                },
-            )
+            await self._broadcast_rewind_state(session_id, session, prompt)
         else:
             # Session not found, just broadcast idle
             await self._connection_manager.broadcast(
@@ -1898,6 +1886,11 @@ class SessionApplicationService:
                 except Exception:
                     logger.error("[session=%s] rewind_to SDK session_id rejected", session_id, exc_info=True)
 
+        await self._broadcast_rewind_state(session_id, session, prompt)
+
+    # ── Message queue (latest-wins) ───────────────────────────
+
+    async def _broadcast_rewind_state(self, session_id: str, session: "Session", prompt: str) -> None:
         all_messages = [
             {"type": msg.message_type.value, "content": msg.content}
             for msg in session.messages
@@ -1911,8 +1904,6 @@ class SessionApplicationService:
                 "messages": all_messages,
             },
         )
-
-    # ── Message queue (latest-wins) ───────────────────────────
 
     async def queue_message(self, session_id: str, command: RunQueryCommand) -> None:
         """Queue a follow-up message to run after the current query finishes.

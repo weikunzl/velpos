@@ -242,7 +242,14 @@ async def websocket_endpoint(
 
         # Pre-warm SDK connection in background so first query is faster
         if session.sdk_session_id and not service.is_agent_connected(session_id):
-            safe_create_task(service.prewarm_connection(session_id))
+            async def _prewarm_background() -> None:
+                bg_svc = await session_service_factory()
+                try:
+                    await bg_svc.prewarm_connection(session_id)
+                finally:
+                    await bg_svc.close()
+
+            safe_create_task(_prewarm_background())
 
         async def _submit_query_background(command: RunQueryCommand) -> None:
             bg_service = await session_service_factory()
@@ -319,7 +326,14 @@ async def websocket_endpoint(
 
             elif action == "cancel":
                 try:
-                    safe_create_task(service.cancel_query(session_id))
+                    async def _cancel_background() -> None:
+                        bg_svc = await session_service_factory()
+                        try:
+                            await bg_svc.cancel_query(session_id)
+                        finally:
+                            await bg_svc.close()
+
+                    safe_create_task(_cancel_background())
                     safe_create_task(team_service.cancel_team_session(session_id))
                     await websocket.send_json({
                         "event": "info",

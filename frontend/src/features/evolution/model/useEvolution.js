@@ -51,7 +51,7 @@ export function useEvolution() {
       if (seq !== _extractSeq) return
       error.value = e.message || 'Failed to extract lessons'
     } finally {
-      loading.value = false
+      if (seq === _extractSeq) loading.value = false
     }
   }
 

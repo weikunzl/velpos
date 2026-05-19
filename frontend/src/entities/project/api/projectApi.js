@@ -57,31 +57,38 @@ export function listWorkspaceFileHistory(projectId, path, limit = 20) {
 }
 
 export async function downloadWorkspaceSelection(projectId, paths) {
-  const res = await fetch(`${API_BASE}/projects/${projectId}/workspace/export`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ paths }),
-  })
-  if (!res.ok) {
-    let message = `HTTP error: ${res.status} ${res.statusText}`
-    try {
-      const body = await res.json()
-      message = body?.message || message
-    } catch {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 30000)
+  try {
+    const res = await fetch(`${API_BASE}/projects/${projectId}/workspace/export`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paths }),
+      signal: controller.signal,
+    })
+    if (!res.ok) {
+      let message = `HTTP error: ${res.status} ${res.statusText}`
+      try {
+        const body = await res.json()
+        message = body?.message || message
+      } catch {
+      }
+      throw new Error(message)
     }
-    throw new Error(message)
+    const blob = await res.blob()
+    const disposition = res.headers.get('content-disposition') || ''
+    const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] || 'workspace-export.zip'
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  } finally {
+    clearTimeout(timeout)
   }
-  const blob = await res.blob()
-  const disposition = res.headers.get('content-disposition') || ''
-  const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] || 'workspace-export.zip'
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  URL.revokeObjectURL(url)
 }
 
 export function readWorkspaceFileAtRef(projectId, path, ref) {

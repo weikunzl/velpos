@@ -174,10 +174,3 @@ export function useGlobalHotkeys({ keys, handler, priority = 0, condition = null
   }
 }
 
-/**
- * Composable for components that need to block global hotkeys
- * Creates a "local" hotkey scope that takes precedence over global handlers
- * @param {string|string[]} keys - Key combination(s) to intercept
- * @param {Function} handler - Local handler function
- * @returns {Object} - Control object
- */

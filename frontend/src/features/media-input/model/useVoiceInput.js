@@ -9,6 +9,7 @@ let recognition = null
 export function useVoiceInput() {
   function startRecording(onResult) {
     if (!supported.value) return
+    stopRecording()
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     recognition = new SpeechRecognition()

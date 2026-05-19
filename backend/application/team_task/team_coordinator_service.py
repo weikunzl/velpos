@@ -334,7 +334,7 @@ class TeamCoordinatorService:
             if step_agent_id and self._agent_service:
                 try:
                     tp = await self._project_repo.find_by_id(target_project_id)
-                    if tp and tp._agents.get("locked_by_task") == task.task_id:
+                    if tp and tp.is_locked_by_task(task.task_id):
                         tp.unlock_agent()
                         await self._project_repo.save(tp)
                         await self._agent_service.unload_agent(

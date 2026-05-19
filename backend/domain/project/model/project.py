@@ -72,6 +72,9 @@ class Project:
     def is_agent_locked(self) -> bool:
         return bool(self._agents.get("locked_by_task"))
 
+    def is_locked_by_task(self, task_id: str) -> bool:
+        return self._agents.get("locked_by_task") == task_id
+
     @property
     def plugins(self) -> dict[str, dict]:
         return dict(self._plugins)

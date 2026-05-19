@@ -7,6 +7,7 @@ const supported = ref(typeof navigator !== 'undefined' && !!navigator.mediaDevic
 export function useVideoInput() {
   async function startCapture() {
     if (!supported.value) return null
+    stopCapture()
     try {
       stream.value = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } })
       isCapturing.value = true

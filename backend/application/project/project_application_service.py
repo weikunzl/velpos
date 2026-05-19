@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable
 
 from domain.shared.async_utils import safe_create_task
+from application.git_helpers import run_git
 
 from application.project.command.create_project_command import CreateProjectCommand
 from application.project.command.init_plugin_command import InitPluginCommand
@@ -325,22 +326,12 @@ class ProjectApplicationService:
             return {"current": "", "branches": []}
 
         # Get current branch
-        proc = await asyncio.create_subprocess_exec(
-            "git", "-C", dir_path, "rev-parse", "--abbrev-ref", "HEAD",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, _ = await proc.communicate()
-        current = stdout.decode().strip() if proc.returncode == 0 else ""
+        result = await run_git(dir_path, "rev-parse", "--abbrev-ref", "HEAD")
+        current = result.stdout if result.ok else ""
 
         # List all local branches
-        proc = await asyncio.create_subprocess_exec(
-            "git", "-C", dir_path, "branch", "--list", "--format=%(refname:short)",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, _ = await proc.communicate()
-        branches = [b.strip() for b in stdout.decode().splitlines() if b.strip()] if proc.returncode == 0 else []
+        result = await run_git(dir_path, "branch", "--list", "--format=%(refname:short)")
+        branches = [b.strip() for b in result.stdout.splitlines() if b.strip()] if result.ok else []
 
         return {"current": current, "branches": branches}
 
@@ -353,24 +344,14 @@ class ProjectApplicationService:
         if not os.path.isdir(os.path.join(dir_path, ".git")):
             raise BusinessException("Not a git repository", "NOT_GIT_REPO")
 
-        proc = await asyncio.create_subprocess_exec(
-            "git", "-C", dir_path, "checkout", branch,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        _, stderr = await proc.communicate()
-        if proc.returncode != 0:
-            err_msg = stderr.decode().strip() if stderr else "git checkout failed"
+        result = await run_git(dir_path, "checkout", branch)
+        if not result.ok:
+            err_msg = result.stderr or "git checkout failed"
             raise BusinessException(f"Failed to checkout: {err_msg}", "GIT_CHECKOUT_FAILED")
 
         # Return new current branch
-        proc = await asyncio.create_subprocess_exec(
-            "git", "-C", dir_path, "rev-parse", "--abbrev-ref", "HEAD",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, _ = await proc.communicate()
-        return stdout.decode().strip() if proc.returncode == 0 else branch
+        result = await run_git(dir_path, "rev-parse", "--abbrev-ref", "HEAD")
+        return result.stdout if result.ok else branch
 
     async def list_workspace_files(
         self,
@@ -436,13 +417,8 @@ class ProjectApplicationService:
         if not os.path.isdir(root / ".git"):
             return {"path": rel_path, "patch": "", "truncated": False}
 
-        proc = await asyncio.create_subprocess_exec(
-            "git", "-C", str(root), "diff", "--", rel_path,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, _ = await proc.communicate()
-        patch = stdout.decode(errors="replace") if proc.returncode == 0 else ""
+        result = await run_git(str(root), "diff", "--", rel_path)
+        patch = result.stdout if result.ok else ""
         max_patch_len = 12000
         return {
             "path": rel_path,
@@ -463,17 +439,14 @@ class ProjectApplicationService:
         if not os.path.isdir(root / ".git"):
             return []
 
-        proc = await asyncio.create_subprocess_exec(
-            "git", "-C", str(root), "log", "--follow", f"--max-count={limit}",
+        result = await run_git(
+            str(root), "log", "--follow", f"--max-count={limit}",
             "--format=%H%x1f%h%x1f%ct%x1f%an%x1f%s", "--", rel_path,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
         )
-        stdout, _ = await proc.communicate()
-        if proc.returncode != 0:
+        if not result.ok:
             return []
         commits: list[dict[str, Any]] = []
-        for line in stdout.decode(errors="replace").splitlines():
+        for line in result.stdout.splitlines():
             parts = line.split("\x1f", 4)
             if len(parts) != 5:
                 continue
@@ -598,16 +571,11 @@ class ProjectApplicationService:
     async def _workspace_git_status(self, root: Path) -> dict[str, str]:
         if not os.path.isdir(root / ".git"):
             return {}
-        proc = await asyncio.create_subprocess_exec(
-            "git", "-C", str(root), "status", "--porcelain",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, _ = await proc.communicate()
-        if proc.returncode != 0:
+        result = await run_git(str(root), "status", "--porcelain")
+        if not result.ok:
             return {}
         statuses: dict[str, str] = {}
-        for line in stdout.decode(errors="replace").splitlines():
+        for line in result.stdout.splitlines():
             if len(line) < 4:
                 continue
             status = line[:2].strip()

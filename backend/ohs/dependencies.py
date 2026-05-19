@@ -192,33 +192,7 @@ async def _cleanup_branch_group(group_id: str) -> None:
 async def get_session_application_service(
     db_session: AsyncSession = Depends(get_async_session),
 ) -> SessionApplicationService:
-    repository = SessionRepositoryImpl(db_session)
-    project_repo = ProjectRepositoryImpl(db_session)
-    audit_repo = SessionAuditEventRepositoryImpl(db_session)
-    timeline_service = SessionRunTimelineService(
-        repository=SessionRunStepRepositoryImpl(db_session),
-        connection_manager=_connection_manager,
-    )
-    timeline_event_service = SessionTimelineEventService(
-        repository=SessionTimelineEventRepositoryImpl(db_session),
-        connection_manager=_connection_manager,
-    )
-    return SessionApplicationService(
-        session_repository=repository,
-        claude_agent_gateway=_claude_agent_gateway,
-        connection_manager=_connection_manager,
-        claude_session_manager=_claude_session_manager,
-        on_assistant_response=_session_coordinator.on_assistant_response,
-        on_user_message=_session_coordinator.on_user_message,
-        project_repository=project_repo,
-        im_unbind_fn=_im_unbind_for_session,
-        audit_event_repository=audit_repo,
-        audit_event_recorder=_session_coordinator.record_audit_event,
-        usage_recorder=_session_coordinator.record_usage_ledger,
-        timeline_service=timeline_service,
-        timeline_event_service=timeline_event_service,
-        session_service_factory=_create_session_service,
-    )
+    return await _create_session_service(db_session)
 
 
 async def get_session_branch_application_service(
@@ -385,6 +359,9 @@ async def _create_session_service(
         on_user_message=_session_coordinator.on_user_message,
         project_repository=ProjectRepositoryImpl(db_session),
         im_unbind_fn=_im_unbind_for_session,
+        audit_event_repository=SessionAuditEventRepositoryImpl(db_session),
+        audit_event_recorder=_session_coordinator.record_audit_event,
+        usage_recorder=_session_coordinator.record_usage_ledger,
         timeline_service=SessionRunTimelineService(
             repository=SessionRunStepRepositoryImpl(db_session),
             connection_manager=_connection_manager,

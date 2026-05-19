@@ -26,7 +26,7 @@ export function useDialogManager() {
   }
 
   function hasOpenDialogs() {
-    for (const [key, ref] of dialogs.entries()) {
+    for (const ref of dialogs.values()) {
       if (ref && ref.value === true) {
         return true
       }
