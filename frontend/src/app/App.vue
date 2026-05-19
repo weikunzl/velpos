@@ -107,7 +107,7 @@ async function handleApplyVb(payload) {
 
 const isMobileSidebarOpen = ref(false)
 const isSidebarCollapsed = ref(
-  localStorage.getItem('vp_sidebar_collapsed') === 'true'
+  localStorage.getItem('pf_sidebar_collapsed') === 'true'
 )
 
 function toggleSidebar() {
@@ -116,7 +116,7 @@ function toggleSidebar() {
 
 function toggleSidebarCollapse() {
   isSidebarCollapsed.value = !isSidebarCollapsed.value
-  localStorage.setItem('vp_sidebar_collapsed', isSidebarCollapsed.value)
+  localStorage.setItem('pf_sidebar_collapsed', isSidebarCollapsed.value)
 }
 
 function handleWorkspaceWidthChange(width) {
@@ -139,7 +139,7 @@ function handleNotificationNavigate(sessionId) {
 function handleLocateSession() {
   if (isSidebarCollapsed.value) {
     isSidebarCollapsed.value = false
-    localStorage.setItem('vp_sidebar_collapsed', false)
+    localStorage.setItem('pf_sidebar_collapsed', false)
   }
   if (window.innerWidth <= 768) {
     isMobileSidebarOpen.value = true
@@ -547,7 +547,7 @@ function handleSessionImported(event) {
   const { sessionId } = event.detail
   if (isSidebarCollapsed.value) {
     isSidebarCollapsed.value = false
-    localStorage.setItem('vp_sidebar_collapsed', false)
+    localStorage.setItem('pf_sidebar_collapsed', false)
   }
   if (window.innerWidth <= 768) {
     isMobileSidebarOpen.value = true

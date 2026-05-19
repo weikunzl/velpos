@@ -2,7 +2,7 @@ import { ref, computed } from 'vue'
 
 const projects = ref([])
 const currentProjectId = ref(null)
-const sidebarMode = ref(localStorage.getItem('vp_sidebar_mode') || 'single')
+const sidebarMode = ref(localStorage.getItem('pf_sidebar_mode') || 'single')
 
 export function useProject() {
   const currentProject = computed(() =>
@@ -23,7 +23,7 @@ export function useProject() {
 
   function setSidebarMode(mode) {
     sidebarMode.value = mode
-    localStorage.setItem('vp_sidebar_mode', mode)
+    localStorage.setItem('pf_sidebar_mode', mode)
   }
 
   function setProjects(list) {

@@ -38,5 +38,5 @@ export function useVideoInput() {
     return { data: base64, media_type: 'image/png', preview: dataUrl }
   }
 
-  return { isCapturing, stream, supported, startCapture, stopCapture, captureFrame }
+  return { isCapturing, supported, startCapture, stopCapture, captureFrame }
 }

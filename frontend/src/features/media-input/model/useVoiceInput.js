@@ -64,5 +64,5 @@ export function useVoiceInput() {
     }
   }
 
-  return { isRecording, transcript, supported, startRecording, stopRecording, toggle }
+  return { isRecording, supported, stopRecording, toggle }
 }

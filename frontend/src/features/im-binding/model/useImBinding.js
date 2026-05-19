@@ -29,7 +29,6 @@ export function useImBinding() {
   const isUnbound = computed(() => !bindingState.value || bindingState.value.binding_status === 'unbound')
   const hasChannels = computed(() => availableChannels.value.length > 0)
   const currentChannelType = computed(() => bindingState.value?.channel_type || '')
-  const currentChannelId = computed(() => bindingState.value?.channel_id || '')
   const bindingMode = computed(() => bindingState.value?.ui_data?.mode || '')
 
   // Find the bound instance across all channel types for active session
@@ -276,7 +275,6 @@ export function useImBinding() {
     isUnbound,
     hasChannels,
     currentChannelType,
-    currentChannelId,
     bindingMode,
     isBoundForSession,
     boundChannelType,

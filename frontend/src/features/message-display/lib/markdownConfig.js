@@ -1,5 +1,6 @@
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import { escapeHtml } from '@shared/lib/escapeHtml'
 
 const renderer = new marked.Renderer()
 const originalLinkRenderer = renderer.link.bind(renderer)
@@ -7,10 +8,6 @@ renderer.link = function (token) {
   const html = originalLinkRenderer(token)
   // Ensure all links open in new tab with security attributes
   return html.replace(/^<a /, '<a target="_blank" rel="noopener noreferrer" ')
-}
-
-function escapeHtml(str) {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
 // Wrap code blocks with a copy button

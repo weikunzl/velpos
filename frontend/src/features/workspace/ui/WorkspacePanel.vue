@@ -4,6 +4,7 @@ import { downloadWorkspaceSelection } from '@entities/project/api/projectApi'
 import hljs from 'highlight.js/lib/common'
 import { useGlobalHotkeys } from '../../../shared/lib/useGlobalHotkeys'
 import { useTimeout } from '@shared/lib/useTimeout'
+import { escapeHtml } from '@shared/lib/escapeHtml'
 import { useWorkspace } from '../model/useWorkspace'
 import { getFilePreviewType, getFileRawUrl } from '../lib/fileTypes'
 import ImagePreview from './ImagePreview.vue'
@@ -599,15 +600,6 @@ function highlightLine(line, path) {
     return escapeHtml(value)
   }
   return escapeHtml(value)
-}
-
-function escapeHtml(value) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
 }
 
 function captureHistoryScrollAnchor() {

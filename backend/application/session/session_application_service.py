@@ -7,7 +7,7 @@ import re
 import uuid
 
 from application.git_helpers import get_current_git_branch as _get_current_git_branch
-from domain.shared.async_utils import safe_create_task
+from domain.shared.async_utils import KeyedLockPool, safe_create_task
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -37,52 +37,23 @@ logger = logging.getLogger(__name__)
 
 
 class SessionApplicationService:
-    _session_locks: dict[str, asyncio.Lock] = {}
-    _session_locks_guard: asyncio.Lock | None = None
-    _MAX_SESSION_LOCKS = 500
+    _session_lock_pool = KeyedLockPool(max_size=500)
     # Shared across all instances to coordinate between WS-service and bg-service
     _cancelled_sessions: set[str] = set()
     _queued_messages: dict[str, "RunQueryCommand"] = {}
     _waiting_for_slot: set[str] = set()
-    _queue_guard: asyncio.Lock | None = None
+    _queue_guard = asyncio.Lock()
     _query_semaphore: asyncio.Semaphore | None = None
-    _query_semaphore_guard: asyncio.Lock | None = None
-
-    @classmethod
-    def _get_session_locks_guard(cls) -> asyncio.Lock:
-        if cls._session_locks_guard is None:
-            cls._session_locks_guard = asyncio.Lock()
-        return cls._session_locks_guard
-
-    @classmethod
-    def _get_queue_guard(cls) -> asyncio.Lock:
-        if cls._queue_guard is None:
-            cls._queue_guard = asyncio.Lock()
-        return cls._queue_guard
-
-    @classmethod
-    def _get_query_semaphore_guard(cls) -> asyncio.Lock:
-        if cls._query_semaphore_guard is None:
-            cls._query_semaphore_guard = asyncio.Lock()
-        return cls._query_semaphore_guard
+    _query_semaphore_guard = asyncio.Lock()
 
     @classmethod
     async def _lock_for_session(cls, session_id: str) -> asyncio.Lock:
-        async with cls._get_session_locks_guard():
-            lock = cls._session_locks.get(session_id)
-            if lock is None:
-                if len(cls._session_locks) >= cls._MAX_SESSION_LOCKS:
-                    stale = [k for k, v in cls._session_locks.items() if not v.locked()]
-                    for k in stale[:len(stale) // 2]:
-                        del cls._session_locks[k]
-                lock = asyncio.Lock()
-                cls._session_locks[session_id] = lock
-            return lock
+        return await cls._session_lock_pool.acquire(session_id)
 
     @classmethod
     async def _get_query_semaphore(cls) -> asyncio.Semaphore:
         if cls._query_semaphore is None:
-            async with cls._get_query_semaphore_guard():
+            async with cls._query_semaphore_guard:
                 if cls._query_semaphore is None:
                     max_concurrent = int(os.getenv("SESSION_MAX_CONCURRENT_QUERIES", "2"))
                     cls._query_semaphore = asyncio.Semaphore(max(1, max_concurrent))
@@ -121,7 +92,7 @@ class SessionApplicationService:
         self._session_service_factory = session_service_factory
 
     async def is_waiting_for_slot(self, session_id: str) -> bool:
-        async with self._get_queue_guard():
+        async with self._queue_guard:
             return session_id in self._waiting_for_slot
 
     async def submit_query(self, command: RunQueryCommand) -> None:
@@ -141,7 +112,7 @@ class SessionApplicationService:
                 )
             async with session_lock:
                 if query_semaphore.locked():
-                    async with self._get_queue_guard():
+                    async with self._queue_guard:
                         self._waiting_for_slot.add(command.session_id)
                     await self._connection_manager.broadcast(
                         command.session_id,
@@ -153,16 +124,16 @@ class SessionApplicationService:
                         payload={"reason": "concurrency_limit"},
                     )
                 async with query_semaphore:
-                    async with self._get_queue_guard():
+                    async with self._queue_guard:
                         self._waiting_for_slot.discard(command.session_id)
                     await self.run_claude_query(command)
         except asyncio.CancelledError:
-            async with self._get_queue_guard():
+            async with self._queue_guard:
                 self._waiting_for_slot.discard(command.session_id)
             self._claude_agent_gateway.mark_idle(command.session_id)
             raise
         except Exception:
-            async with self._get_queue_guard():
+            async with self._queue_guard:
                 self._waiting_for_slot.discard(command.session_id)
             self._claude_agent_gateway.mark_idle(command.session_id)
             raise
@@ -859,13 +830,10 @@ class SessionApplicationService:
         await self._claude_agent_gateway.cleanup_session(session_id)
 
         # Clean up session lock to prevent memory leak
-        async with self._get_session_locks_guard():
-            lock = self._session_locks.get(session_id)
-            if lock and not lock.locked():
-                self._session_locks.pop(session_id, None)
+        await self._session_lock_pool.release(session_id)
 
         # Clean up other class-level tracking state
-        async with self._get_queue_guard():
+        async with self._queue_guard:
             self._cancelled_sessions.discard(session_id)
             self._queued_messages.pop(session_id, None)
             self._waiting_for_slot.discard(session_id)
@@ -1383,7 +1351,7 @@ class SessionApplicationService:
             )
 
             # Execute queued follow-up message if present
-            async with self._get_queue_guard():
+            async with self._queue_guard:
                 queued = self._queued_messages.pop(command.session_id, None)
             if queued:
                 await self._set_queued_command(command.session_id, None)
@@ -1733,7 +1701,7 @@ class SessionApplicationService:
         6. Rewinds domain session (removes last user msg + responses).
         7. Broadcasts rewind event with the original prompt.
         """
-        async with self._get_queue_guard():
+        async with self._queue_guard:
             self._cancelled_sessions.add(session_id)
             self._waiting_for_slot.discard(session_id)
         await self._record_audit_event(session_id, "cancel_requested", actor="user")
@@ -1824,7 +1792,7 @@ class SessionApplicationService:
                 {"event": "status_change", "status": "idle"},
             )
 
-        async with self._get_queue_guard():
+        async with self._queue_guard:
             self._cancelled_sessions.discard(session_id)
         await self._set_cancel_requested(session_id, False)
         await self._record_audit_event(
@@ -1910,7 +1878,7 @@ class SessionApplicationService:
 
         Latest-wins: only the most recent queued message per session is kept.
         """
-        async with self._get_queue_guard():
+        async with self._queue_guard:
             previous = self._queued_messages.get(session_id)
             self._queued_messages[session_id] = command
         await self._set_queued_command(session_id, command)
@@ -1934,7 +1902,7 @@ class SessionApplicationService:
 
     async def clear_queued_message(self, session_id: str) -> None:
         """Clear any queued message for a session (e.g. on cancel)."""
-        async with self._get_queue_guard():
+        async with self._queue_guard:
             removed = self._queued_messages.pop(session_id, None)
         await self._set_queued_command(session_id, None)
         if removed:

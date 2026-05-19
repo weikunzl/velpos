@@ -396,14 +396,6 @@ class WeixinAdapter(ImChannelAdapter):
 
     # ── Routing context — WeChat needs context_token in addition to sender_id ──
 
-    def extract_routing_context(
-        self, sender_id: str, group_id: str,
-    ) -> dict[str, str]:
-        ctx = super().extract_routing_context(sender_id, group_id)
-        # context_token is written to binding._config by _persist_context_token
-        # during polling; it will be included when _persist_reply_context flushes.
-        return ctx
-
     def build_reply_context(self, binding: ImBinding) -> dict[str, str] | None:
         ctx = super().build_reply_context(binding) or {}
         ct = binding.config.get("last_context_token", "")

@@ -6,38 +6,20 @@ import os
 from datetime import datetime
 from typing import Any
 
+from domain.shared.async_utils import KeyedLockPool
+
 
 class TraceFileManager:
 
-    _locks: dict[str, asyncio.Lock] = {}
-    _locks_guard: asyncio.Lock | None = None
-    _MAX_LOCKS = 200
-
-    @classmethod
-    def _get_locks_guard(cls) -> asyncio.Lock:
-        if cls._locks_guard is None:
-            cls._locks_guard = asyncio.Lock()
-        return cls._locks_guard
+    _lock_pool = KeyedLockPool(max_size=200)
 
     @classmethod
     async def _get_lock(cls, trace_id: str) -> asyncio.Lock:
-        async with cls._get_locks_guard():
-            lock = cls._locks.get(trace_id)
-            if lock is None:
-                if len(cls._locks) >= cls._MAX_LOCKS:
-                    stale = [k for k, v in cls._locks.items() if not v.locked()]
-                    for k in stale[:max(len(stale) // 2, 1)]:
-                        del cls._locks[k]
-                lock = asyncio.Lock()
-                cls._locks[trace_id] = lock
-            return lock
+        return await cls._lock_pool.acquire(trace_id)
 
     @classmethod
     async def _release_lock(cls, trace_id: str) -> None:
-        async with cls._get_locks_guard():
-            lock = cls._locks.get(trace_id)
-            if lock and not lock.locked():
-                cls._locks.pop(trace_id, None)
+        await cls._lock_pool.release(trace_id)
 
     @staticmethod
     def trace_path(project_dir: str, trace_id: str) -> str:
