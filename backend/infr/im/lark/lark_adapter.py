@@ -64,14 +64,28 @@ class LarkAdapter(ImChannelAdapter):
         self._connections: dict[str, _WsConnection] = {}
         self._lock = asyncio.Lock()
 
-    # ── Initialization ──────────────────────────────────────────
+    def _get_credentials(
+        self, binding_or_config: ImBinding | dict,
+    ) -> tuple[str, str, str] | None:
+        """Extract and validate (app_id, app_secret, brand) from binding or config dict.
 
-    async def check_init_status(self, config: dict) -> bool:
+        Returns ``(app_id, app_secret, brand)`` or ``None`` if credentials are missing.
+        """
+        config = binding_or_config if isinstance(binding_or_config, dict) else binding_or_config.config
         app_id = config.get("app_id", "")
         app_secret = config.get("app_secret", "")
         brand = config.get("brand", "feishu")
         if not app_id or not app_secret:
+            return None
+        return (app_id, app_secret, brand)
+
+    # ── Initialization ──────────────────────────────────────────
+
+    async def check_init_status(self, config: dict) -> bool:
+        creds = self._get_credentials(config)
+        if not creds:
             return False
+        app_id, app_secret, brand = creds
         try:
             await self._api.get_tenant_token(app_id, app_secret, brand)
             return True
@@ -235,20 +249,11 @@ class LarkAdapter(ImChannelAdapter):
     async def start_listening(self, binding: ImBinding, on_message=None) -> None:
         """Start lark-oapi WebSocket client for this channel instance."""
         channel_id = binding.channel_id
-        app_id = binding.config.get("app_id", "")
-        app_secret = binding.config.get("app_secret", "")
-        brand = binding.config.get("brand", "feishu")
-
-        if not app_id or not app_secret:
+        creds = self._get_credentials(binding)
+        if not creds:
             logger.error("[Lark-adapter] No app_id/app_secret for start_listening channel=%s", channel_id)
             return
-
-        # Stop existing listener for this specific channel if any
-        async with self._lock:
-            existing = self._connections.pop(channel_id, None)
-        if existing and existing.thread and existing.thread.is_alive():
-            logger.info("[Lark-adapter] Stopping existing WS for channel=%s before restart", channel_id)
-            await self._stop_connection(existing)
+        app_id, app_secret, brand = creds
 
         conn = _WsConnection(
             channel_id=channel_id,
@@ -257,8 +262,16 @@ class LarkAdapter(ImChannelAdapter):
             main_loop=asyncio.get_running_loop(),
         )
 
+        # Atomically replace: pop old + insert new inside one lock acquisition
+        existing = None
         async with self._lock:
+            existing = self._connections.pop(channel_id, None)
             self._connections[channel_id] = conn
+
+        # Stop existing outside lock (new conn is already registered)
+        if existing and existing.thread and existing.thread.is_alive():
+            logger.info("[Lark-adapter] Stopping existing WS for channel=%s before restart", channel_id)
+            await self._stop_connection(existing)
 
         logger.info(
             "[Lark-adapter] Starting WS listener: session=%s channel=%s app_id=%s",
@@ -642,13 +655,11 @@ class LarkAdapter(ImChannelAdapter):
         self, binding: ImBinding, content: str,
         reply_context: dict | None = None,
     ) -> None:
-        app_id = binding.config.get("app_id", "")
-        app_secret = binding.config.get("app_secret", "")
-        brand = binding.config.get("brand", "feishu")
-
-        if not app_id or not app_secret:
+        creds = self._get_credentials(binding)
+        if not creds:
             logger.warning("[Lark-adapter] No credentials for send_message")
             return
+        app_id, app_secret, brand = creds
 
         ctx = reply_context or {}
         chat_id = ctx.get("group_id", "")
@@ -709,12 +720,11 @@ class LarkAdapter(ImChannelAdapter):
         self, binding: ImBinding, message_id: str, reaction: str,
     ) -> str:
         """Add emoji reaction. Returns reaction_id for later removal."""
-        app_id = binding.config.get("app_id", "")
-        app_secret = binding.config.get("app_secret", "")
-        brand = binding.config.get("brand", "feishu")
-        if not app_id or not app_secret:
+        creds = self._get_credentials(binding)
+        if not creds:
             logger.warning("[Lark-adapter] No credentials for add_reaction")
             return ""
+        app_id, app_secret, brand = creds
         try:
             token = await self._api.get_tenant_token(app_id, app_secret, brand)
             reaction_id = await self._api.add_reaction(token, message_id, reaction, brand=brand)

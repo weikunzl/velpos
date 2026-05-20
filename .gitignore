@@ -55,3 +55,4 @@ image_output/
 
 # Agents
 .agents/
+.optcode/

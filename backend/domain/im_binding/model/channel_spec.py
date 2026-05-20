@@ -9,9 +9,6 @@ from domain.im_binding.model.channel_type import ImChannelType
 class BindingMode(str, enum.Enum):
     """绑定交互模式"""
     QR_CODE = "qr_code"
-    PROMPT = "prompt"
-    WEBHOOK = "webhook"
-    OAUTH = "oauth"
 
 
 @dataclass(frozen=True)

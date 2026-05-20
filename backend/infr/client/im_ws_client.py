@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any, AsyncIterator
+from typing import Any
 from uuid import uuid4
 
 import websockets
@@ -126,22 +126,6 @@ class ImWsClient(ImWsGateway):
             return ws.protocol.state.name == "OPEN"
         except AttributeError:
             return False
-
-    async def listen_messages(
-        self, im_user_id: str
-    ) -> AsyncIterator[dict[str, Any]]:
-        queue = self._message_queues.get(im_user_id)
-        if queue is None:
-            raise BusinessException(
-                "No active IM WS connection for the user",
-                code="IM_WS_NOT_CONNECTED",
-            )
-
-        while True:
-            msg = await queue.get()
-            if msg is None:
-                break
-            yield msg
 
     async def _listen_loop(self, im_user_id: str) -> None:
         while True:

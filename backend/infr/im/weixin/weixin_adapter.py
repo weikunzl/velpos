@@ -374,24 +374,25 @@ class WeixinAdapter(ImChannelAdapter):
 
     async def close(self) -> None:
         """Shutdown adapter — stop all poll loops across all channels."""
-        channel_ids = list(self._poll_tasks.keys())
+        async with self._listen_lock:
+            channel_ids = list(self._poll_tasks.keys())
 
-        for cid in channel_ids:
-            stop_evt = self._stop_events.pop(cid, None)
-            if stop_evt:
-                stop_evt.set()
+            for cid in channel_ids:
+                stop_evt = self._stop_events.pop(cid, None)
+                if stop_evt:
+                    stop_evt.set()
 
-            task = self._poll_tasks.pop(cid, None)
-            if task and not task.done():
-                task.cancel()
-                try:
-                    await task
-                except (asyncio.CancelledError, Exception):
-                    pass
+                task = self._poll_tasks.pop(cid, None)
+                if task and not task.done():
+                    task.cancel()
+                    try:
+                        await task
+                    except (asyncio.CancelledError, Exception):
+                        pass
 
-        self._on_messages.clear()
-        self._stop_events.clear()
-        self._poll_tasks.clear()
+            self._on_messages.clear()
+            self._stop_events.clear()
+            self._poll_tasks.clear()
         logger.info("[WeChat-adapter] Adapter closed, %d channels stopped", len(channel_ids))
 
     # ── Routing context — WeChat needs context_token in addition to sender_id ──

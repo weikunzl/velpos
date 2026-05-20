@@ -120,7 +120,6 @@ export function useEvolution() {
     loading,
     saving,
     error,
-    proposal,
     lessons,
     createdDraft,
     open,

@@ -301,8 +301,6 @@ export function useMemoryManager() {
 
   return {
     content,
-    fileHash,
-    activeRevision,
     versions,
     selectedRevision,
     selectedContent,

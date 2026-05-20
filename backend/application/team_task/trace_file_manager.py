@@ -35,21 +35,24 @@ class TraceFileManager:
         project_id: str,
     ) -> str:
         lock = await cls._get_lock(trace_id)
-        async with lock:
-            trace_data = {
-                "trace_id": trace_id,
-                "requirement": requirement,
-                "coordinator_session_id": coordinator_session_id,
-                "project_id": project_id,
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat(),
-                "status": "running",
-                "call_chain": [],
-                "artifacts": [],
-            }
-            path = cls.trace_path(project_dir, trace_id)
-            await asyncio.to_thread(cls._write_json, path, trace_data)
-            return path
+        try:
+            async with lock:
+                trace_data = {
+                    "trace_id": trace_id,
+                    "requirement": requirement,
+                    "coordinator_session_id": coordinator_session_id,
+                    "project_id": project_id,
+                    "created_at": datetime.now().isoformat(),
+                    "updated_at": datetime.now().isoformat(),
+                    "status": "running",
+                    "call_chain": [],
+                    "artifacts": [],
+                }
+                path = cls.trace_path(project_dir, trace_id)
+                await asyncio.to_thread(cls._write_json, path, trace_data)
+                return path
+        finally:
+            await cls._lock_pool.unref(trace_id)
 
     @classmethod
     async def add_task_to_trace(
@@ -59,17 +62,20 @@ class TraceFileManager:
         task_entry: dict[str, Any],
     ) -> None:
         lock = await cls._get_lock(trace_id)
-        async with lock:
-            data = await asyncio.to_thread(
-                cls._read_json, cls.trace_path(project_dir, trace_id),
-            )
-            if data is None:
-                return
-            data["call_chain"].append(task_entry)
-            data["updated_at"] = datetime.now().isoformat()
-            await asyncio.to_thread(
-                cls._write_json, cls.trace_path(project_dir, trace_id), data,
-            )
+        try:
+            async with lock:
+                data = await asyncio.to_thread(
+                    cls._read_json, cls.trace_path(project_dir, trace_id),
+                )
+                if data is None:
+                    return
+                data["call_chain"].append(task_entry)
+                data["updated_at"] = datetime.now().isoformat()
+                await asyncio.to_thread(
+                    cls._write_json, cls.trace_path(project_dir, trace_id), data,
+                )
+        finally:
+            await cls._lock_pool.unref(trace_id)
 
     @classmethod
     async def update_task_in_trace(
@@ -80,21 +86,24 @@ class TraceFileManager:
         updates: dict[str, Any],
     ) -> None:
         lock = await cls._get_lock(trace_id)
-        async with lock:
-            data = await asyncio.to_thread(
-                cls._read_json, cls.trace_path(project_dir, trace_id),
-            )
-            if data is None:
-                return
-            for entry in data["call_chain"]:
-                if entry.get("task_id") == task_id:
-                    entry.update(updates)
-                    break
-            data["updated_at"] = datetime.now().isoformat()
-            cls._rebuild_artifacts(data)
-            await asyncio.to_thread(
-                cls._write_json, cls.trace_path(project_dir, trace_id), data,
-            )
+        try:
+            async with lock:
+                data = await asyncio.to_thread(
+                    cls._read_json, cls.trace_path(project_dir, trace_id),
+                )
+                if data is None:
+                    return
+                for entry in data["call_chain"]:
+                    if entry.get("task_id") == task_id:
+                        entry.update(updates)
+                        break
+                data["updated_at"] = datetime.now().isoformat()
+                cls._rebuild_artifacts(data)
+                await asyncio.to_thread(
+                    cls._write_json, cls.trace_path(project_dir, trace_id), data,
+                )
+        finally:
+            await cls._lock_pool.unref(trace_id)
 
     @classmethod
     async def complete_trace(
@@ -103,18 +112,21 @@ class TraceFileManager:
         trace_id: str,
     ) -> None:
         lock = await cls._get_lock(trace_id)
-        async with lock:
-            data = await asyncio.to_thread(
-                cls._read_json, cls.trace_path(project_dir, trace_id),
-            )
-            if data is None:
-                return
-            data["status"] = "completed"
-            data["updated_at"] = datetime.now().isoformat()
-            cls._rebuild_artifacts(data)
-            await asyncio.to_thread(
-                cls._write_json, cls.trace_path(project_dir, trace_id), data,
-            )
+        try:
+            async with lock:
+                data = await asyncio.to_thread(
+                    cls._read_json, cls.trace_path(project_dir, trace_id),
+                )
+                if data is None:
+                    return
+                data["status"] = "completed"
+                data["updated_at"] = datetime.now().isoformat()
+                cls._rebuild_artifacts(data)
+                await asyncio.to_thread(
+                    cls._write_json, cls.trace_path(project_dir, trace_id), data,
+                )
+        finally:
+            await cls._lock_pool.unref(trace_id)
         await cls._release_lock(trace_id)
 
     @classmethod
@@ -124,17 +136,20 @@ class TraceFileManager:
         trace_id: str,
     ) -> None:
         lock = await cls._get_lock(trace_id)
-        async with lock:
-            data = await asyncio.to_thread(
-                cls._read_json, cls.trace_path(project_dir, trace_id),
-            )
-            if data is None:
-                return
-            data["status"] = "failed"
-            data["updated_at"] = datetime.now().isoformat()
-            await asyncio.to_thread(
-                cls._write_json, cls.trace_path(project_dir, trace_id), data,
-            )
+        try:
+            async with lock:
+                data = await asyncio.to_thread(
+                    cls._read_json, cls.trace_path(project_dir, trace_id),
+                )
+                if data is None:
+                    return
+                data["status"] = "failed"
+                data["updated_at"] = datetime.now().isoformat()
+                await asyncio.to_thread(
+                    cls._write_json, cls.trace_path(project_dir, trace_id), data,
+                )
+        finally:
+            await cls._lock_pool.unref(trace_id)
         await cls._release_lock(trace_id)
 
     @staticmethod

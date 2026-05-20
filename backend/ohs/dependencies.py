@@ -386,10 +386,7 @@ async def get_session_run_timeline_service(
 async def get_evolution_application_service(
     db_session: AsyncSession = Depends(get_async_session),
 ) -> EvolutionApplicationService:
-    revision_service = ClaudeMdRevisionApplicationService(
-        revision_repository=ClaudeMdRevisionRepositoryImpl(db_session),
-        project_repository=ProjectRepositoryImpl(db_session),
-    )
+    revision_service = _create_revision_service(db_session)
     return EvolutionApplicationService(
         proposal_repository=EvolutionProposalRepositoryImpl(db_session),
         session_repository=SessionRepositoryImpl(db_session),
@@ -420,10 +417,7 @@ async def get_project_memory_application_service(
 async def get_claude_md_revision_application_service(
     db_session: AsyncSession = Depends(get_async_session),
 ) -> ClaudeMdRevisionApplicationService:
-    return ClaudeMdRevisionApplicationService(
-        revision_repository=ClaudeMdRevisionRepositoryImpl(db_session),
-        project_repository=ProjectRepositoryImpl(db_session),
-    )
+    return _create_revision_service(db_session)
 
 
 async def get_project_application_service(
@@ -444,6 +438,13 @@ async def get_project_application_service(
 _git_application_service = GitApplicationService()
 
 
+def _create_revision_service(db_session: AsyncSession) -> ClaudeMdRevisionApplicationService:
+    return ClaudeMdRevisionApplicationService(
+        revision_repository=ClaudeMdRevisionRepositoryImpl(db_session),
+        project_repository=ProjectRepositoryImpl(db_session),
+    )
+
+
 def get_git_application_service() -> GitApplicationService:
     return _git_application_service
 
@@ -451,10 +452,7 @@ def get_git_application_service() -> GitApplicationService:
 async def get_agent_application_service(
     db_session: AsyncSession = Depends(get_async_session),
 ) -> AgentApplicationService:
-    revision_service = ClaudeMdRevisionApplicationService(
-        revision_repository=ClaudeMdRevisionRepositoryImpl(db_session),
-        project_repository=ProjectRepositoryImpl(db_session),
-    )
+    revision_service = _create_revision_service(db_session)
     return AgentApplicationService(
         plugin_manager=_claude_plugin_manager,
         claude_md_revision_service=revision_service,
@@ -470,10 +468,7 @@ async def get_project_repository(
 async def get_team_coordinator_service(
     db_session: AsyncSession = Depends(get_async_session),
 ) -> TeamCoordinatorService:
-    revision_service = ClaudeMdRevisionApplicationService(
-        revision_repository=ClaudeMdRevisionRepositoryImpl(db_session),
-        project_repository=ProjectRepositoryImpl(db_session),
-    )
+    revision_service = _create_revision_service(db_session)
     agent_service = AgentApplicationService(
         plugin_manager=_claude_plugin_manager,
         claude_md_revision_service=revision_service,

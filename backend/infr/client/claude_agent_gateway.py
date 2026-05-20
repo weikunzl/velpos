@@ -241,7 +241,8 @@ class ClaudeAgentGateway(ClaudeAgentGatewayPort):
     async def _idle_disconnect(self, session_id: str) -> None:
         """Disconnect an idle session. Skips if running a query or pending user response."""
         self._idle_timers.pop(session_id, None)
-        if session_id not in self._clients:
+        client_at_start = self._clients.get(session_id)
+        if client_at_start is None:
             return
         # Don't disconnect while a query is actively running
         if session_id in self._active_sessions:
@@ -270,8 +271,16 @@ class ClaudeAgentGateway(ClaudeAgentGatewayPort):
             logger.info("空闲断开跳过(查询在等待期间开始): session=%s, 重新调度", session_id)
             self.schedule_idle_disconnect(session_id)
             return
+        # Guard: only disconnect if the client hasn't been replaced
+        async with self._client_lock:
+            current_client = self._clients.get(session_id)
+            if current_client is not client_at_start:
+                logger.info(
+                    "空闲断开跳过(连接已更新): session=%s", session_id,
+                )
+                return
+            await self._disconnect_unlocked(session_id)
         logger.info("空闲断开: session=%s", session_id)
-        await self.disconnect(session_id)
 
     async def disconnect_all(self) -> None:
         """Disconnect all active SDK clients (server shutdown)."""

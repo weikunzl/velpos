@@ -108,7 +108,6 @@ export function useWorkspace() {
     selectedFile,
     selectedDiff,
     fileHistory,
-    historicalFile,
     loading,
     reading,
     historyLoading,

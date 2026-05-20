@@ -26,7 +26,6 @@ let _fetchChannelsPromise = null
 export function useImBinding() {
   const isBound = computed(() => bindingState.value?.binding_status === 'bound')
   const isBinding = computed(() => bindingState.value?.binding_status === 'binding')
-  const isUnbound = computed(() => !bindingState.value || bindingState.value.binding_status === 'unbound')
   const hasChannels = computed(() => availableChannels.value.length > 0)
   const currentChannelType = computed(() => bindingState.value?.channel_type || '')
   const bindingMode = computed(() => bindingState.value?.ui_data?.mode || '')
@@ -272,9 +271,7 @@ export function useImBinding() {
     syncResult,
     isBound,
     isBinding,
-    isUnbound,
     hasChannels,
-    currentChannelType,
     bindingMode,
     isBoundForSession,
     boundChannelType,

@@ -112,14 +112,7 @@ export function useTeamRuntime() {
     }
   }
 
-  function clearSession(sessionId) {
-    teamTasks.value.delete(sessionId)
-    teamTasks.value = new Map(teamTasks.value)
-  }
-
   return {
-    teamTasks,
-    workerSessionStates,
     displayStatusFromTaskStatus,
     handleTeamEvent,
     handleWorkerSessionEvent,
@@ -127,6 +120,5 @@ export function useTeamRuntime() {
     getWorkerSessionState,
     loadTimeline,
     loadLinkedSessions,
-    clearSession,
   }
 }

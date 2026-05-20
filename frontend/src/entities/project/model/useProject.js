@@ -17,10 +17,6 @@ export function useProject() {
     singleProjects.value.filter((p) => Boolean(p.agents?.current))
   )
 
-  const teamProjects = computed(() =>
-    projects.value.filter((p) => p.project_type === 'team')
-  )
-
   function setSidebarMode(mode) {
     sidebarMode.value = mode
     localStorage.setItem('pf_sidebar_mode', mode)
@@ -58,9 +54,7 @@ export function useProject() {
     currentProjectId,
     currentProject,
     sidebarMode,
-    singleProjects,
     singleAgentProjects,
-    teamProjects,
     setSidebarMode,
     setProjects,
     setCurrentProjectId,

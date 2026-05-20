@@ -11,6 +11,7 @@ class KeyedLockPool:
 
     def __init__(self, max_size: int = 500) -> None:
         self._locks: dict[str, asyncio.Lock] = {}
+        self._refcounts: dict[str, int] = {}
         self._guard = asyncio.Lock()
         self._max_size = max_size
 
@@ -19,18 +20,33 @@ class KeyedLockPool:
             lock = self._locks.get(key)
             if lock is None:
                 if len(self._locks) >= self._max_size:
-                    stale = [k for k, v in self._locks.items() if not v.locked()]
+                    stale = [
+                        k for k, v in self._locks.items()
+                        if not v.locked() and self._refcounts.get(k, 0) == 0
+                    ]
                     for k in stale[: max(len(stale) // 2, 1)]:
                         del self._locks[k]
+                        self._refcounts.pop(k, None)
                 lock = asyncio.Lock()
                 self._locks[key] = lock
+            self._refcounts[key] = self._refcounts.get(key, 0) + 1
             return lock
+
+    async def unref(self, key: str) -> None:
+        """Decrement reference count for a key after the lock is no longer needed."""
+        async with self._guard:
+            count = self._refcounts.get(key, 0) - 1
+            if count <= 0:
+                self._refcounts.pop(key, None)
+            else:
+                self._refcounts[key] = count
 
     async def release(self, key: str) -> None:
         async with self._guard:
             lock = self._locks.get(key)
-            if lock and not lock.locked():
+            if lock and not lock.locked() and self._refcounts.get(key, 0) == 0:
                 self._locks.pop(key, None)
+                self._refcounts.pop(key, None)
 
 
 def safe_create_task(coro, *, name: str | None = None) -> asyncio.Task:

@@ -137,6 +137,8 @@ class SessionApplicationService:
                 self._waiting_for_slot.discard(command.session_id)
             self._claude_agent_gateway.mark_idle(command.session_id)
             raise
+        finally:
+            await self._session_lock_pool.unref(command.session_id)
 
     async def _save_session(self, session: Session, *, commit: bool = False) -> None:
         """Persist a session and optionally commit immediately.
@@ -754,26 +756,29 @@ class SessionApplicationService:
         from infr.repository.session_repository_impl import SessionRepositoryImpl
 
         session_lock = await self._lock_for_session(session_id)
-        async with session_lock:
-            try:
-                await self._claude_agent_gateway.open_fresh_connection(session_id, model, cwd)
-                sdk_session_id = ""
-                async for msg_dict in self._claude_agent_gateway.send_query(session_id, "/status"):
-                    sid = msg_dict.get("sdk_session_id")
-                    if sid:
-                        sdk_session_id = sid
-                if sdk_session_id:
-                    async with async_session_factory() as db:
-                        repo = SessionRepositoryImpl(db)
-                        session = await repo.find_by_id(session_id)
-                        if session:
-                            session.update_sdk_session_id(sdk_session_id)
-                            await repo.save(session)
-                            await db.commit()
-                    self._claude_agent_gateway.schedule_idle_disconnect(session_id)
-                    logger.info("[session=%s] SDK session bound on create: %s", session_id, sdk_session_id)
-            except Exception:
-                logger.warning("[session=%s] SDK session pre-bind failed", session_id, exc_info=True)
+        try:
+            async with session_lock:
+                try:
+                    await self._claude_agent_gateway.open_fresh_connection(session_id, model, cwd)
+                    sdk_session_id = ""
+                    async for msg_dict in self._claude_agent_gateway.send_query(session_id, "/status"):
+                        sid = msg_dict.get("sdk_session_id")
+                        if sid:
+                            sdk_session_id = sid
+                    if sdk_session_id:
+                        async with async_session_factory() as db:
+                            repo = SessionRepositoryImpl(db)
+                            session = await repo.find_by_id(session_id)
+                            if session:
+                                session.update_sdk_session_id(sdk_session_id)
+                                await repo.save(session)
+                                await db.commit()
+                        self._claude_agent_gateway.schedule_idle_disconnect(session_id)
+                        logger.info("[session=%s] SDK session bound on create: %s", session_id, sdk_session_id)
+                except Exception:
+                    logger.warning("[session=%s] SDK session pre-bind failed", session_id, exc_info=True)
+        finally:
+            await self._session_lock_pool.unref(session_id)
 
     async def get_session(self, session_id: str) -> Session:
         """Get session details by session_id."""
@@ -1311,6 +1316,8 @@ class SessionApplicationService:
             self._claude_agent_gateway.mark_idle(command.session_id)
             # If cancelled, cancel_query handles save and broadcast
             if command.session_id in self._cancelled_sessions:
+                async with self._queue_guard:
+                    self._cancelled_sessions.discard(command.session_id)
                 return
             # Use a fresh DB session to ensure final save succeeds even if
             # the original connection was lost during a long-running query
@@ -1793,8 +1800,6 @@ class SessionApplicationService:
                 {"event": "status_change", "status": "idle"},
             )
 
-        async with self._queue_guard:
-            self._cancelled_sessions.discard(session_id)
         await self._set_cancel_requested(session_id, False)
         await self._record_audit_event(
             session_id,

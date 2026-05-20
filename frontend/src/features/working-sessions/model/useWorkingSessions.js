@@ -29,7 +29,6 @@ export function useWorkingSessions() {
   }
 
   return {
-    workingSessions,
     workingCount,
     workingList,
     markWorking,
