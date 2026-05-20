@@ -746,25 +746,23 @@ class TeamCoordinatorService:
                     )
 
     async def delete_team_session(self, coordinator_session_id: str) -> list[str]:
-        """Delete all worker sessions associated with a coordinator session.
+        """Delete all team tasks and collect worker session IDs for a coordinator session.
 
-        Returns list of deleted worker session IDs.
+        Disconnects worker gateways and removes task records.
+        Returns list of worker session IDs so the caller can cascade-delete sessions.
         """
         tasks = await self._task_repo.find_by_coordinator(coordinator_session_id)
-        deleted_ids = []
+        worker_ids = []
         for task in tasks:
             if task.worker_session_id:
-                worker = await self._session_repo.find_by_id(task.worker_session_id)
-                if worker:
-                    try:
-                        await self._gateway.disconnect(task.worker_session_id)
-                    except Exception:
-                        logger.debug("Disconnect failed for worker session=%s", task.worker_session_id, exc_info=True)
-                    await self._session_repo.remove(task.worker_session_id)
-                    await self._gateway.cleanup_session(task.worker_session_id)
-                    deleted_ids.append(task.worker_session_id)
+                try:
+                    await self._gateway.disconnect(task.worker_session_id)
+                except Exception:
+                    logger.debug("Disconnect failed for worker session=%s", task.worker_session_id, exc_info=True)
+                await self._gateway.cleanup_session(task.worker_session_id)
+                worker_ids.append(task.worker_session_id)
             await self._task_repo.remove(task.task_id)
-        return deleted_ids
+        return worker_ids
 
     def _find_member_by_role(self, config: dict, role: str) -> dict | None:
         """Find a team member config by role."""

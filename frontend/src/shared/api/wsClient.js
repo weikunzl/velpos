@@ -7,6 +7,7 @@ export function createGlobalEventConnection() {
   let ws = null
   let reconnectTimer = null
   let eventHandler = null
+  let reconnectHandler = null
   let reconnectAttempt = 0
   let destroyed = false
 
@@ -21,7 +22,11 @@ export function createGlobalEventConnection() {
 
   function connect() {
     ws = new WebSocket(buildUrl())
-    ws.onopen = () => { reconnectAttempt = 0 }
+    ws.onopen = () => {
+      const wasReconnect = reconnectAttempt > 0
+      reconnectAttempt = 0
+      if (wasReconnect && reconnectHandler) reconnectHandler()
+    }
     ws.onmessage = (event) => {
       if (!eventHandler) return
       try {
@@ -42,6 +47,10 @@ export function createGlobalEventConnection() {
     eventHandler = handler
   }
 
+  function onReconnect(handler) {
+    reconnectHandler = handler
+  }
+
   function close() {
     destroyed = true
     if (reconnectTimer) clearTimeout(reconnectTimer)
@@ -49,7 +58,7 @@ export function createGlobalEventConnection() {
   }
 
   connect()
-  return { onEvent, close }
+  return { onEvent, onReconnect, close }
 }
 
 export function createWsConnection(sessionId) {

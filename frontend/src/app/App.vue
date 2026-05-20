@@ -82,7 +82,7 @@ const schedulerProjectId = ref('')
 const scheduleCounts = ref({})
 let globalEventConnection = null
 const sidebarRef = ref(null)
-const { handleTeamEvent, handleWorkerSessionEvent } = useTeamRuntime()
+const { handleTeamEvent, handleWorkerSessionEvent, loadTimeline, loadLinkedSessions } = useTeamRuntime()
 const vbRunning = ref(false)
 const vbMessage = ref('')
 let vbRefresh = null
@@ -502,6 +502,14 @@ onMounted(async () => {
     await loadScheduleCounts()
     globalEventConnection = createGlobalEventConnection()
     globalEventConnection.onEvent(handleGlobalEvent)
+    globalEventConnection.onReconnect(() => {
+      const sid = currentSessionId.value
+      const proj = currentProject.value
+      if (sid && proj?.project_type === 'team') {
+        loadTimeline(proj.id, sid).catch(() => {})
+        loadLinkedSessions(proj.id, sid).catch(() => {})
+      }
+    })
     window.addEventListener('vp-schedules-changed', loadScheduleCounts)
     restoreLastSession()
     ready.value = true

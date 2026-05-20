@@ -2,7 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useTeamRuntime } from '../model/useTeamRuntime'
 import { getProject } from '@entities/project'
-import { getWorkspaceDiff } from '@entities/project/api/projectApi'
+import { getWorkspaceDiff, updateTeamConfig } from '@entities/project/api/projectApi'
 import { useCancellableAsync } from '@shared/lib/useCancellableAsync'
 import { formatDuration } from '@features/message-display'
 import { getSessionArtifacts, getTeamTaskDetail, cancelTeamTask, retryTeamTask } from '../api/teamApi'
@@ -55,10 +55,13 @@ const displaySessions = computed(() => linkedSessions.value.map(session => {
   }
 }))
 
+const refreshError = ref('')
+
 async function refresh() {
   if (!props.sessionId || !props.projectId) return
   const version = refreshTracker.start()
   loading.value = true
+  refreshError.value = ''
   try {
     await loadTimeline(props.projectId, props.sessionId)
     if (!refreshTracker.isCurrent(version)) return
@@ -69,6 +72,10 @@ async function refresh() {
       if (!refreshTracker.isCurrent(version)) return
       teamConfig.value = project?.team_config || null
     } catch {}
+  } catch (err) {
+    if (refreshTracker.isCurrent(version)) {
+      refreshError.value = err.message || 'Failed to load team data'
+    }
   } finally {
     if (refreshTracker.isCurrent(version)) loading.value = false
   }
@@ -269,16 +276,92 @@ function navigateToWorker(session) {
     projectId: session.project_id,
   })
 }
+
+const settingsOpen = ref(false)
+const settingsSaving = ref(false)
+const settingsError = ref('')
+const editConfig = ref({})
+
+function openSettings() {
+  if (!teamConfig.value) return
+  editConfig.value = {
+    max_concurrent: teamConfig.value.max_concurrent ?? 2,
+    worker_max_turns: teamConfig.value.worker_max_turns ?? 50,
+    worker_max_budget_usd: teamConfig.value.worker_max_budget_usd ?? 1.0,
+    max_depth: teamConfig.value.max_depth ?? 5,
+    file_checkpointing: teamConfig.value.file_checkpointing ?? true,
+  }
+  settingsError.value = ''
+  settingsOpen.value = true
+}
+
+async function saveSettings() {
+  if (settingsSaving.value) return
+  settingsSaving.value = true
+  settingsError.value = ''
+  try {
+    const merged = { ...teamConfig.value, ...editConfig.value }
+    await updateTeamConfig(props.projectId, merged)
+    teamConfig.value = merged
+    settingsOpen.value = false
+  } catch (err) {
+    settingsError.value = err.message || 'Failed to save settings'
+  } finally {
+    settingsSaving.value = false
+  }
+}
 </script>
 
 <template>
   <div v-if="visible" class="team-panel">
     <div class="panel-header">
       <h3 class="panel-title">Team Runtime</h3>
-      <button class="panel-close" @click="emit('close')" aria-label="Close">&times;</button>
+      <div class="header-actions">
+        <button class="header-btn" @click="openSettings" title="Settings">&#9881;</button>
+        <button class="panel-close" @click="emit('close')" aria-label="Close">&times;</button>
+      </div>
     </div>
 
     <div class="panel-body">
+      <div v-if="refreshError" class="panel-error">
+        {{ refreshError }}
+        <button class="retry-link" @click="refresh">Retry</button>
+      </div>
+
+      <!-- Settings -->
+      <section v-if="settingsOpen" class="panel-section settings-section">
+        <h4 class="section-title">Settings</h4>
+        <div class="settings-form">
+          <label class="settings-field">
+            <span class="settings-label">Max Concurrent</span>
+            <input type="number" v-model.number="editConfig.max_concurrent" min="1" max="20" class="settings-input" />
+          </label>
+          <label class="settings-field">
+            <span class="settings-label">Worker Max Turns</span>
+            <input type="number" v-model.number="editConfig.worker_max_turns" min="1" max="500" class="settings-input" />
+          </label>
+          <label class="settings-field">
+            <span class="settings-label">Budget (USD)</span>
+            <input type="number" v-model.number="editConfig.worker_max_budget_usd" min="0" step="0.1" class="settings-input" />
+          </label>
+          <label class="settings-field">
+            <span class="settings-label">Max Depth</span>
+            <input type="number" v-model.number="editConfig.max_depth" min="1" max="10" class="settings-input" />
+          </label>
+          <label class="settings-field settings-field--checkbox">
+            <input type="checkbox" v-model="editConfig.file_checkpointing" />
+            <span class="settings-label">File Checkpointing</span>
+          </label>
+          <div v-if="settingsError" class="detail-error">{{ settingsError }}</div>
+          <div class="settings-actions">
+            <button class="settings-btn settings-btn--save" :disabled="settingsSaving" @click="saveSettings">
+              {{ settingsSaving ? 'Saving...' : 'Save' }}
+            </button>
+            <button class="settings-btn" @click="settingsOpen = false">Cancel</button>
+          </div>
+        </div>
+      </section>
+
       <!-- Workflow Visualization -->
       <section v-if="workflowSteps.length > 0" class="panel-section">
         <h4 class="section-title">Workflow</h4>
@@ -490,6 +573,27 @@ function navigateToWorker(session) {
   margin: 0;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.header-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.header-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
 .panel-close {
   background: none;
   border: none;
@@ -509,6 +613,26 @@ function navigateToWorker(session) {
   flex: 1;
   overflow-y: auto;
   padding: 12px;
+}
+
+.panel-error {
+  font-size: 12px;
+  color: var(--red, #e06c75);
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--red, #e06c75) 8%, var(--bg-tertiary));
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.retry-link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+  margin-left: 8px;
+  text-decoration: underline;
 }
 
 .panel-section {
@@ -862,5 +986,89 @@ function navigateToWorker(session) {
 .refresh-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.settings-section {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  background: var(--bg-primary);
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.settings-field--checkbox {
+  justify-content: flex-start;
+}
+
+.settings-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.settings-input {
+  width: 72px;
+  padding: 3px 6px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.settings-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.settings-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.settings-btn {
+  flex: 1;
+  padding: 4px 8px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.settings-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.settings-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.settings-btn--save {
+  background: var(--accent);
+  color: var(--bg-primary);
+  border-color: var(--accent);
+}
+
+.settings-btn--save:hover:not(:disabled) {
+  opacity: 0.9;
+  background: var(--accent);
+  color: var(--bg-primary);
 }
 </style>
