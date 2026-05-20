@@ -974,6 +974,7 @@ class SessionApplicationService:
             claude_agent_gateway=self._claude_agent_gateway,
             connection_manager=self._connection_manager,
             agent_application_service=agent_service,
+            notify_im_fn=self._on_assistant_response,
         )
 
         trace_id = uuid.uuid4().hex[:8]
