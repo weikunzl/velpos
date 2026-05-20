@@ -291,18 +291,21 @@ onBeforeUnmount(() => {
     >
       <div class="resize-handle" @mousedown="startResize"></div>
       <div class="terminal-tabs">
-        <button
+        <div
           v-for="tab in tabs"
           :key="tab.id"
           class="terminal-tab"
           :class="{ active: tab.id === activeTabId }"
+          role="tab"
+          tabindex="0"
           @click="activeTabId = tab.id"
+          @keydown.enter="activeTabId = tab.id"
         >
           <span>{{ tab.title }}</span>
           <span v-if="tab.status === 'connecting'" class="tab-running"></span>
           <span v-else class="tab-status" :class="`status-${tab.status}`"></span>
           <button class="tab-close" :disabled="tabs.length === 1" @click.stop="closeTab(tab.id)">×</button>
-        </button>
+        </div>
         <button class="tab-add" title="New terminal" aria-label="New terminal" @click="addTab">+</button>
         <button class="btn-clear" @click="clearActiveTab">Clear</button>
         <button class="btn-close" aria-label="Close terminal" @click="$emit('close')">×</button>

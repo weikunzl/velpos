@@ -36,6 +36,26 @@ async def get_linked_sessions(
     return ApiResponse.success(sessions)
 
 
+@router.get("/{project_id}/tasks/{task_id}", summary="Get team task detail")
+async def get_task_detail(
+    project_id: str,
+    task_id: str,
+    service: ServiceDep,
+) -> ApiResponse[dict]:
+    detail = await service.get_task_detail(project_id, task_id)
+    return ApiResponse.success(detail)
+
+
+@router.post("/{project_id}/tasks/{task_id}/cancel", summary="Cancel a single team task")
+async def cancel_task(
+    project_id: str,
+    task_id: str,
+    service: ServiceDep,
+) -> ApiResponse[dict]:
+    await service.cancel_task(project_id, task_id)
+    return ApiResponse.success({"task_id": task_id, "status": "cancelled"})
+
+
 @router.get("/worker-context/{session_id}", summary="Get coordinator info for a worker session")
 async def get_worker_context(
     session_id: str,

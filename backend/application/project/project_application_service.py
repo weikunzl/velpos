@@ -166,27 +166,7 @@ class ProjectApplicationService:
 
     async def create_team_project(self, command: CreateTeamProjectCommand) -> Project:
         config = command.team_config
-        mode = config.get("mode")
-        if mode not in ("delegation", "collaboration"):
-            raise BusinessException("Invalid team mode, must be 'delegation' or 'collaboration'", "INVALID_TEAM_MODE")
-
-        members = config.get("pipeline" if mode == "delegation" else "members", [])
-        if not members:
-            raise BusinessException("Team must have at least one member", "TEAM_NO_MEMBERS")
-
-        seen_project_ids = set()
-        for member in members:
-            pid = member.get("project_id")
-            if not pid:
-                raise BusinessException("Each member must reference a project_id", "MEMBER_NO_PROJECT")
-            if pid in seen_project_ids:
-                raise BusinessException(f"Duplicate project_id in team: {pid}", "DUPLICATE_MEMBER")
-            seen_project_ids.add(pid)
-            sub_project = await self._project_repository.find_by_id(pid)
-            if sub_project is None:
-                raise BusinessException(f"Sub-project not found: {pid}", "SUB_PROJECT_NOT_FOUND")
-            if sub_project.project_type == "team":
-                raise BusinessException(f"Cannot use a team project as a sub-project: {pid}", "NESTED_TEAM")
+        mode = await self._validate_team_config(config)
 
         dir_path = command.dir_path.strip()
         if not dir_path or not os.path.isabs(dir_path):
@@ -243,9 +223,80 @@ class ProjectApplicationService:
             raise BusinessException("Project not found", "PROJECT_NOT_FOUND")
         if project.project_type != "team":
             raise BusinessException("Not a team project", "NOT_TEAM_PROJECT")
+        await self._validate_team_config(team_config)
         project.update_team_config(team_config)
         await self._project_repository.save(project)
         return project
+
+    async def _validate_team_config(self, config: dict) -> str:
+        mode = config.get("mode")
+        if mode not in ("delegation", "collaboration"):
+            raise BusinessException("Invalid team mode, must be 'delegation' or 'collaboration'", "INVALID_TEAM_MODE")
+
+        members_key = "pipeline" if mode == "delegation" else "members"
+        members = config.get(members_key, [])
+        if not isinstance(members, list) or not members:
+            raise BusinessException("Team must have at least one member", "TEAM_NO_MEMBERS")
+
+        seen_project_ids = set()
+        seen_roles = set()
+        for member in members:
+            if not isinstance(member, dict):
+                raise BusinessException("Each team member must be an object", "INVALID_MEMBER")
+            pid = member.get("project_id")
+            role = member.get("role")
+            if not pid:
+                raise BusinessException("Each member must reference a project_id", "MEMBER_NO_PROJECT")
+            if not role:
+                raise BusinessException("Each member must define a role", "MEMBER_NO_ROLE")
+            if pid in seen_project_ids:
+                raise BusinessException(f"Duplicate project_id in team: {pid}", "DUPLICATE_MEMBER")
+            if role in seen_roles:
+                raise BusinessException(f"Duplicate role in team: {role}", "DUPLICATE_ROLE")
+            seen_project_ids.add(pid)
+            seen_roles.add(role)
+            sub_project = await self._project_repository.find_by_id(pid)
+            if sub_project is None:
+                raise BusinessException(f"Sub-project not found: {pid}", "SUB_PROJECT_NOT_FOUND")
+            if sub_project.project_type == "team":
+                raise BusinessException(f"Cannot use a team project as a sub-project: {pid}", "NESTED_TEAM")
+
+        self._validate_int_range(config, "max_concurrent", 1, 10)
+        self._validate_int_range(config, "worker_max_turns", 1, 200)
+        self._validate_number_range(config, "worker_max_budget_usd", 0.1, 50)
+        self._validate_int_range(config, "max_depth", 1, 10)
+
+        if "file_checkpointing" in config and not isinstance(config.get("file_checkpointing"), bool):
+            raise BusinessException("file_checkpointing must be a boolean", "INVALID_FILE_CHECKPOINTING")
+
+        if mode == "collaboration":
+            default_workflow = config.get("default_workflow", [])
+            if default_workflow and not isinstance(default_workflow, list):
+                raise BusinessException("default_workflow must be a list", "INVALID_DEFAULT_WORKFLOW")
+            unknown_roles = [role for role in default_workflow if role not in seen_roles]
+            if unknown_roles:
+                raise BusinessException(
+                    f"default_workflow contains unknown roles: {', '.join(unknown_roles)}",
+                    "INVALID_DEFAULT_WORKFLOW",
+                )
+
+        return mode
+
+    @staticmethod
+    def _validate_int_range(config: dict, key: str, minimum: int, maximum: int) -> None:
+        if key not in config:
+            return
+        value = config.get(key)
+        if not isinstance(value, int) or isinstance(value, bool) or value < minimum or value > maximum:
+            raise BusinessException(f"{key} must be an integer between {minimum} and {maximum}", f"INVALID_{key.upper()}")
+
+    @staticmethod
+    def _validate_number_range(config: dict, key: str, minimum: float, maximum: float) -> None:
+        if key not in config:
+            return
+        value = config.get(key)
+        if not isinstance(value, (int, float)) or isinstance(value, bool) or value < minimum or value > maximum:
+            raise BusinessException(f"{key} must be between {minimum} and {maximum}", f"INVALID_{key.upper()}")
 
     async def get_sessions_by_project(self, project_id: str) -> list:
         """Return all sessions belonging to a project."""

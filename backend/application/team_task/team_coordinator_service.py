@@ -241,7 +241,7 @@ class TeamCoordinatorService:
         )
 
         try:
-            result_text, result_data = await self._execute_worker(
+            result_text, result_data, cost_usd, duration_ms = await self._execute_worker(
                 worker_session_id=worker_session_id,
                 model=worker_model,
                 prompt=worker_prompt,
@@ -254,10 +254,14 @@ class TeamCoordinatorService:
                 enable_file_checkpointing=file_checkpointing,
             )
 
-            task.complete(result_text, result_data=result_data)
-            await self._task_repo.save(task)
+            latest_task = await self._task_repo.find_by_id(task.task_id) or task
+            if latest_task.status == TeamTaskStatus.CANCELLED:
+                return "Task cancelled"
 
-            # Update trace with completion data
+            latest_task.complete(result_text, cost_usd=cost_usd, duration_ms=duration_ms, result_data=result_data)
+            await self._task_repo.save(latest_task)
+            task = latest_task
+
             if trace_id:
                 await TraceFileManager.update_task_in_trace(
                     project_dir=project.dir_path,
@@ -267,6 +271,7 @@ class TeamCoordinatorService:
                         "status": "completed",
                         "completed_at": datetime.now().isoformat(),
                         "duration_ms": task.duration_ms,
+                        "cost_usd": cost_usd,
                         "result_summary": result_text[:500],
                         "result_data": result_data,
                         "files_changed": result_data.get("files_changed", []),
@@ -282,8 +287,10 @@ class TeamCoordinatorService:
 
         except asyncio.CancelledError:
             error_msg = "Task cancelled"
-            task.cancel()
-            await self._task_repo.save(task)
+            latest_task = await self._task_repo.find_by_id(task.task_id) or task
+            latest_task.cancel()
+            await self._task_repo.save(latest_task)
+            task = latest_task
 
             if trace_id:
                 await TraceFileManager.update_task_in_trace(
@@ -298,7 +305,7 @@ class TeamCoordinatorService:
                 )
 
             await self._broadcast_team_event(main_project_id, coordinator_session_id, {
-                "event": "team_task_failed",
+                "event": "team_task_cancelled",
                 "task": task.to_timeline_entry(),
             })
 
@@ -306,10 +313,15 @@ class TeamCoordinatorService:
 
         except Exception as e:
             error_msg = str(e)[:500]
-            task.fail(error_msg)
-            await self._task_repo.save(task)
+            latest_task = await self._task_repo.find_by_id(task.task_id) or task
+            if latest_task.status == TeamTaskStatus.CANCELLED:
+                task = latest_task
+                return "Task cancelled"
 
-            # Update trace with failure data
+            latest_task.fail(error_msg)
+            await self._task_repo.save(latest_task)
+            task = latest_task
+
             if trace_id:
                 await TraceFileManager.update_task_in_trace(
                     project_dir=project.dir_path,
@@ -401,10 +413,15 @@ class TeamCoordinatorService:
         output_format: dict | None = None,
         hooks: dict | None = None,
         enable_file_checkpointing: bool = False,
-    ) -> tuple[str, dict]:
-        """Execute a worker session and collect the result."""
+    ) -> tuple[str, dict, float, int]:
+        """Execute a worker session and collect the result.
+
+        Returns (result_text, result_data, cost_usd, duration_ms).
+        """
         result_text = ""
         last_assistant_text = ""
+        cost_usd = 0.0
+        duration_ms = 0
 
         async for msg_dict in self._gateway.connect(
             session_id=worker_session_id,
@@ -424,6 +441,8 @@ class TeamCoordinatorService:
             if msg_type == "result":
                 content = msg_dict.get("content", {})
                 result_text = content.get("text", "")
+                cost_usd = content.get("total_cost_usd", 0.0) or 0.0
+                duration_ms = content.get("duration_ms", 0) or 0
                 if content.get("is_error"):
                     raise RuntimeError(f"Worker error: {result_text}")
             elif msg_type == "assistant":
@@ -451,7 +470,7 @@ class TeamCoordinatorService:
         # Clean up connection
         self._gateway.schedule_idle_disconnect(worker_session_id, delay=30)
 
-        return final, result_data
+        return final, result_data, cost_usd, duration_ms
 
     async def handle_help_request(
         self,
@@ -479,10 +498,19 @@ class TeamCoordinatorService:
         max_depth = config.get("max_depth", 5)
 
         if task.depth + 1 >= max_depth:
-            return (
+            answer = (
                 f"Cannot route help request: maximum nesting depth ({max_depth}) reached. "
                 "Please proceed with your best judgment based on available information."
             )
+            await self._broadcast_team_event(task.main_project_id, task.coordinator_session_id, {
+                "event": "team_task_help_resolved",
+                "task": task.to_timeline_entry(),
+                "question": question,
+                "target_role": target_role,
+                "help_failed": True,
+                "answer_summary": answer[:500],
+            })
+            return answer
 
         # Mark the current task as waiting for help
         task.wait_for_help()
@@ -495,7 +523,7 @@ class TeamCoordinatorService:
             "target_role": target_role,
         })
 
-        # Dispatch to target role
+        help_failed = False
         try:
             answer = await self.dispatch_task(
                 main_project_id=task.main_project_id,
@@ -508,11 +536,23 @@ class TeamCoordinatorService:
                 trace_id=task.trace_id,
             )
         except Exception as e:
+            help_failed = True
             answer = f"Help request failed: {e}"
 
-        # Resume the original task
-        task.resume_from_help()
-        await self._task_repo.save(task)
+        latest_task = await self._task_repo.find_by_id(task.task_id) or task
+        if latest_task.status == TeamTaskStatus.WAITING_FOR_HELP:
+            latest_task.resume_from_help()
+            await self._task_repo.save(latest_task)
+        task = latest_task
+
+        await self._broadcast_team_event(task.main_project_id, task.coordinator_session_id, {
+            "event": "team_task_help_resolved",
+            "task": task.to_timeline_entry(),
+            "question": question,
+            "target_role": target_role,
+            "help_failed": help_failed,
+            "answer_summary": answer[:500],
+        })
 
         return answer
 
@@ -548,6 +588,26 @@ class TeamCoordinatorService:
         """Get the timeline of team tasks for a coordinator session."""
         tasks = await self._task_repo.find_by_coordinator(coordinator_session_id)
         return [t.to_timeline_entry() for t in tasks]
+
+    async def get_task_detail(self, project_id: str, task_id: str) -> dict:
+        task = await self._task_repo.find_by_id(task_id)
+        if not task:
+            raise BusinessException("Team task not found", "TEAM_TASK_NOT_FOUND")
+        if task.main_project_id != project_id:
+            raise BusinessException("Team task does not belong to this project", "TEAM_TASK_PROJECT_MISMATCH")
+
+        target_project = await self._project_repo.find_by_id(task.target_project_id)
+        worker_session = None
+        if task.worker_session_id:
+            worker_session = await self._session_repo.find_by_id(task.worker_session_id)
+
+        return {
+            **task.to_timeline_entry(),
+            "context": task.context,
+            "target_project_name": target_project.name if target_project else "",
+            "target_project_dir": target_project.dir_path if target_project else "",
+            "worker_session_name": worker_session.name if worker_session else "",
+        }
 
     async def get_linked_sessions(self, coordinator_session_id: str) -> list[dict]:
         """Get all worker sessions linked to a coordinator session."""
@@ -593,12 +653,68 @@ class TeamCoordinatorService:
             return "running"
         return session_status or "idle"
 
+    async def cancel_task(self, project_id: str, task_id: str) -> None:
+        """Cancel a single team task by ID."""
+        task = await self._task_repo.find_by_id(task_id)
+        if not task:
+            raise BusinessException("Team task not found", "TEAM_TASK_NOT_FOUND")
+        if task.main_project_id != project_id:
+            raise BusinessException("Team task does not belong to this project", "TEAM_TASK_PROJECT_MISMATCH")
+        if task.status in (TeamTaskStatus.COMPLETED, TeamTaskStatus.FAILED, TeamTaskStatus.CANCELLED):
+            raise BusinessException("Cannot cancel a task that is already in a terminal state", "TEAM_TASK_TERMINAL")
+
+        task.cancel()
+        await self._task_repo.save(task)
+
+        project = await self._project_repo.find_by_id(project_id)
+        if task.trace_id and project:
+            await TraceFileManager.update_task_in_trace(
+                project_dir=project.dir_path,
+                trace_id=task.trace_id,
+                task_id=task.task_id,
+                updates={
+                    "status": "cancelled",
+                    "completed_at": datetime.now().isoformat(),
+                    "error_message": "Task cancelled by user",
+                },
+            )
+
+        await self._broadcast_team_event(task.main_project_id, task.coordinator_session_id, {
+            "event": "team_task_cancelled",
+            "task": task.to_timeline_entry(),
+        })
+
+        if task.worker_session_id:
+            try:
+                await self._gateway.interrupt(task.worker_session_id)
+            except Exception:
+                logger.warning("Failed to interrupt worker session %s", task.worker_session_id)
+
     async def cancel_team_session(self, coordinator_session_id: str) -> None:
         """Cancel all running tasks for a coordinator session."""
         tasks = await self._task_repo.find_running_by_coordinator(coordinator_session_id)
         for task in tasks:
             task.cancel()
             await self._task_repo.save(task)
+
+            project = await self._project_repo.find_by_id(task.main_project_id)
+            if task.trace_id and project:
+                await TraceFileManager.update_task_in_trace(
+                    project_dir=project.dir_path,
+                    trace_id=task.trace_id,
+                    task_id=task.task_id,
+                    updates={
+                        "status": "cancelled",
+                        "completed_at": datetime.now().isoformat(),
+                        "error_message": "Task cancelled",
+                    },
+                )
+
+            await self._broadcast_team_event(task.main_project_id, task.coordinator_session_id, {
+                "event": "team_task_cancelled",
+                "task": task.to_timeline_entry(),
+            })
+
             if task.worker_session_id:
                 try:
                     await self._gateway.interrupt(task.worker_session_id)

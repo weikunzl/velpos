@@ -29,15 +29,11 @@ export function useTeamRuntime() {
 
     const tasks = teamTasks.value.get(coordSessionId) || []
 
-    if (eventType === 'team_task_created') {
-      tasks.push(task)
+    const idx = tasks.findIndex(t => t.task_id === task.task_id)
+    if (idx >= 0) {
+      tasks[idx] = task
     } else {
-      const idx = tasks.findIndex(t => t.task_id === task.task_id)
-      if (idx >= 0) {
-        tasks[idx] = task
-      } else {
-        tasks.push(task)
-      }
+      tasks.push(task)
     }
 
     if (task.worker_session_id) {
