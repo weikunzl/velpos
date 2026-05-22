@@ -21,7 +21,9 @@ from application.evolution.evolution_application_service import EvolutionApplica
 from application.memory.claude_md_revision_application_service import ClaudeMdRevisionApplicationService
 from application.memory.project_memory_application_service import ProjectMemoryApplicationService
 from application.plugin.plugin_application_service import PluginApplicationService
+from application.project.plugin_init_application_service import PluginInitApplicationService
 from application.project.project_application_service import ProjectApplicationService
+from application.project.workspace_application_service import WorkspaceApplicationService
 from application.scheduler.scheduler_application_service import SchedulerApplicationService
 from application.session.session_application_service import SessionApplicationService
 from application.session.session_branch_application_service import SessionBranchApplicationService
@@ -432,6 +434,25 @@ async def get_project_application_service(
         session_service_factory=_create_session_service,
         connection_manager=_connection_manager,
         team_task_repository=team_task_repo,
+    )
+
+
+async def get_workspace_application_service(
+    db_session: AsyncSession = Depends(get_async_session),
+) -> WorkspaceApplicationService:
+    project_repo = ProjectRepositoryImpl(db_session)
+    return WorkspaceApplicationService(
+        project_repository=project_repo,
+    )
+
+
+async def get_plugin_init_application_service(
+    db_session: AsyncSession = Depends(get_async_session),
+) -> PluginInitApplicationService:
+    project_repo = ProjectRepositoryImpl(db_session)
+    return PluginInitApplicationService(
+        project_repository=project_repo,
+        session_service_factory=_create_session_service,
     )
 
 

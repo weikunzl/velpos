@@ -11,9 +11,11 @@ from application.project.command.create_project_command import CreateProjectComm
 from application.project.command.init_plugin_command import InitPluginCommand
 from application.project.command.reorder_projects_command import ReorderProjectsCommand
 from application.team_task.command.create_team_project_command import CreateTeamProjectCommand
+from application.project.plugin_init_application_service import PluginInitApplicationService
 from application.project.project_application_service import ProjectApplicationService
+from application.project.workspace_application_service import WorkspaceApplicationService
 from ohs.assembler.session_assembler import SessionAssembler
-from ohs.dependencies import get_project_application_service
+from ohs.dependencies import get_plugin_init_application_service, get_project_application_service, get_workspace_application_service
 from ohs.http.api_response import ApiResponse
 from ohs.http.dto.project_dto import (
     CompletePluginInitRequest,
@@ -47,6 +49,16 @@ router = APIRouter(prefix="/api/projects", tags=["Project"])
 ServiceDep = Annotated[
     ProjectApplicationService,
     Depends(get_project_application_service),
+]
+
+WorkspaceDep = Annotated[
+    WorkspaceApplicationService,
+    Depends(get_workspace_application_service),
+]
+
+PluginInitDep = Annotated[
+    PluginInitApplicationService,
+    Depends(get_plugin_init_application_service),
 ]
 
 
@@ -155,7 +167,7 @@ async def pick_directory(
 async def init_plugin(
     project_id: str,
     request: InitPluginRequest,
-    service: ServiceDep,
+    service: PluginInitDep,
 ) -> ApiResponse[ProjectResponse]:
     command = InitPluginCommand(
         project_id=project_id,
@@ -170,7 +182,7 @@ async def init_plugin(
 async def complete_plugin_init(
     project_id: str,
     request: CompletePluginInitRequest,
-    service: ServiceDep,
+    service: PluginInitDep,
 ) -> ApiResponse[ProjectResponse]:
     project = await service.complete_plugin_init(project_id, request.plugin_type)
     return ApiResponse.success(ProjectResponse.from_domain(project))
@@ -180,7 +192,7 @@ async def complete_plugin_init(
 async def reset_plugin(
     project_id: str,
     request: ResetPluginRequest,
-    service: ServiceDep,
+    service: PluginInitDep,
 ) -> ApiResponse[ProjectResponse]:
     project = await service.reset_plugin(project_id, request.plugin_type)
     return ApiResponse.success(ProjectResponse.from_domain(project))
@@ -189,7 +201,7 @@ async def reset_plugin(
 @router.get("/{project_id}/workspace/files", summary="List project workspace files")
 async def list_workspace_files(
     project_id: str,
-    service: ServiceDep,
+    service: WorkspaceDep,
     changed_only: bool = Query(default=False),
     keyword: str = Query(default="", max_length=200),
 ) -> ApiResponse[WorkspaceFileListResponse]:
@@ -202,7 +214,7 @@ async def list_workspace_files(
 @router.get("/{project_id}/workspace/file", summary="Read project workspace file")
 async def read_workspace_file(
     project_id: str,
-    service: ServiceDep,
+    service: WorkspaceDep,
     path: str = Query(..., min_length=1, max_length=1000),
 ) -> ApiResponse[WorkspaceFileContentResponse]:
     data = await service.read_workspace_file(project_id, path)
@@ -212,7 +224,7 @@ async def read_workspace_file(
 @router.get("/{project_id}/workspace/file-raw", summary="Serve raw workspace file")
 async def read_workspace_file_raw(
     project_id: str,
-    service: ServiceDep,
+    service: WorkspaceDep,
     path: str = Query(..., min_length=1, max_length=1000),
 ):
     file_path = await service.read_workspace_file_raw(project_id, path)
@@ -227,7 +239,7 @@ async def read_workspace_file_raw(
 @router.get("/{project_id}/workspace/diff", summary="Get project workspace file diff")
 async def get_workspace_diff(
     project_id: str,
-    service: ServiceDep,
+    service: WorkspaceDep,
     path: str = Query(..., min_length=1, max_length=1000),
 ) -> ApiResponse[WorkspaceFileDiffResponse]:
     data = await service.get_workspace_diff(project_id, path)
@@ -237,7 +249,7 @@ async def get_workspace_diff(
 @router.get("/{project_id}/workspace/file-history", summary="List project workspace file history")
 async def list_workspace_file_history(
     project_id: str,
-    service: ServiceDep,
+    service: WorkspaceDep,
     path: str = Query(..., min_length=1, max_length=1000),
     limit: int = Query(default=20, ge=1, le=100),
 ) -> ApiResponse[WorkspaceFileHistoryResponse]:
@@ -250,7 +262,7 @@ async def list_workspace_file_history(
 @router.get("/{project_id}/workspace/file-at-ref", summary="Read project workspace file at git ref")
 async def read_workspace_file_at_ref(
     project_id: str,
-    service: ServiceDep,
+    service: WorkspaceDep,
     path: str = Query(..., min_length=1, max_length=1000),
     ref: str = Query(..., min_length=1, max_length=80),
 ) -> ApiResponse[WorkspaceFileAtRefResponse]:
@@ -262,7 +274,7 @@ async def read_workspace_file_at_ref(
 async def export_workspace_selection(
     project_id: str,
     request: WorkspaceExportRequest,
-    service: ServiceDep,
+    service: WorkspaceDep,
 ) -> StreamingResponse:
     filename, content = await service.export_workspace_selection(project_id, request.paths)
     return StreamingResponse(
