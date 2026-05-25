@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncGenerator
 
+from sqlalchemy.dialects.mysql import aiomysql as _sa_aiomysql
 from sqlalchemy.exc import OperationalError, PendingRollbackError
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -13,6 +14,17 @@ from sqlalchemy.ext.asyncio import (
 from infr.config.base import DATABASE_URL
 
 logger = logging.getLogger(__name__)
+
+# SQLAlchemy 2.0.49 + aiomysql 0.3.2: ping(reconnect) lacks a default value,
+# causing TypeError when pool_pre_ping calls ping() without arguments.
+_orig_aiomysql_ping = _sa_aiomysql.AsyncAdapt_aiomysql_connection.ping
+
+
+def _patched_aiomysql_ping(self, reconnect: bool = False) -> None:
+    return _orig_aiomysql_ping(self, reconnect)
+
+
+_sa_aiomysql.AsyncAdapt_aiomysql_connection.ping = _patched_aiomysql_ping
 
 __all__ = ["DATABASE_URL", "async_engine", "async_session_factory", "get_async_session"]
 

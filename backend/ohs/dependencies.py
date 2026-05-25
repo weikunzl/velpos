@@ -19,7 +19,9 @@ from application.im_binding.im_channel_application_service import ImChannelAppli
 from application.message.attachment_application_service import AttachmentApplicationService
 from application.evolution.evolution_application_service import EvolutionApplicationService
 from application.memory.claude_md_revision_application_service import ClaudeMdRevisionApplicationService
+from application.memory.memory_file_application_service import MemoryFileApplicationService
 from application.memory.project_memory_application_service import ProjectMemoryApplicationService
+from application.memory.rule_file_application_service import RuleFileApplicationService
 from application.plugin.plugin_application_service import PluginApplicationService
 from application.project.plugin_init_application_service import PluginInitApplicationService
 from application.project.project_application_service import ProjectApplicationService
@@ -457,6 +459,8 @@ async def get_plugin_init_application_service(
 
 
 _git_application_service = GitApplicationService()
+_memory_file_application_service = MemoryFileApplicationService()
+_rule_file_application_service = RuleFileApplicationService()
 
 
 def _create_revision_service(db_session: AsyncSession) -> ClaudeMdRevisionApplicationService:
@@ -468,6 +472,14 @@ def _create_revision_service(db_session: AsyncSession) -> ClaudeMdRevisionApplic
 
 def get_git_application_service() -> GitApplicationService:
     return _git_application_service
+
+
+def get_memory_file_application_service() -> MemoryFileApplicationService:
+    return _memory_file_application_service
+
+
+def get_rule_file_application_service() -> RuleFileApplicationService:
+    return _rule_file_application_service
 
 
 async def get_agent_application_service(
