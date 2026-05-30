@@ -65,16 +65,6 @@ const queryHistory = computed(() => {
   return state ? state.queryHistory : []
 })
 
-const runSteps = computed(() => {
-  const state = _stateMap.get(currentSessionId.value)
-  return state ? state.runSteps : []
-})
-
-const timelineEvents = computed(() => {
-  const state = _stateMap.get(currentSessionId.value)
-  return state ? state.timelineEvents : []
-})
-
 const queued = computed(() => {
   const state = _stateMap.get(currentSessionId.value)
   return state ? state.queued : false
@@ -344,8 +334,6 @@ export function useSession() {
     waitingForSlot,
     recovery,
     queryHistory,
-    runSteps,
-    timelineEvents,
     restoredPrompt,
     // Global state
     sessions,

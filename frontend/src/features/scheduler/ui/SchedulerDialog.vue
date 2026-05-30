@@ -1,7 +1,9 @@
 <script setup>
 import { ref, watch, computed } from 'vue'
 import { useSession } from '@entities/session'
+import { useProject } from '@entities/project'
 import { useImBinding } from '@features/im-binding'
+import { fetchCommands } from '@features/command-palette/api/commandApi'
 import { useScheduler } from '../model/useScheduler'
 import { useDialogManager, useVisibleProxy, useEscapeToClose } from '@shared/lib/useDialogManager'
 
@@ -17,11 +19,56 @@ useDialogManager().useDialog('scheduler', useVisibleProxy(props, emit))
 useEscapeToClose(() => props.visible, () => emit('close'))
 
 const { sessions } = useSession()
+const { projects } = useProject()
 const { availableChannels, fetchChannels } = useImBinding()
 const { tasks, loading, saving, error, loadSchedules, saveNewSchedule, toggleSchedule, removeSchedule, runNow } = useScheduler()
+
+const skillCommands = ref([])
+const skillLoading = ref(false)
+const skillDropdownOpen = ref(false)
+const skillSearch = ref('')
+
+const projectDir = computed(() => {
+  const project = projects.value.find(p => p.id === props.projectId)
+  return project?.dir_path || ''
+})
+
+const filteredSkillCommands = computed(() => {
+  const q = skillSearch.value.toLowerCase()
+  if (!q) return skillCommands.value
+  return skillCommands.value.filter(
+    c => c.name.toLowerCase().includes(q) || (c.description || '').toLowerCase().includes(q)
+  )
+})
+
+async function loadSkillCommands() {
+  const dir = projectDir.value
+  if (!dir) { skillCommands.value = []; return }
+  skillLoading.value = true
+  try {
+    const data = await fetchCommands(dir)
+    skillCommands.value = (data.commands || []).filter(c => c.isUserInvocable !== false)
+  } catch { skillCommands.value = [] }
+  finally { skillLoading.value = false }
+}
+
+function selectSkill(cmd) {
+  form.value.skill_name = cmd.name
+  form.value.skill_type = cmd.type || 'command'
+  skillDropdownOpen.value = false
+  skillSearch.value = ''
+}
+
+function clearSkill() {
+  form.value.skill_name = ''
+  form.value.skill_type = ''
+}
+
 const form = ref({
   name: '',
   prompt: '',
+  skill_name: '',
+  skill_type: '',
   schedule_type: 'hourly',
   interval_minutes: 30,
   interval_hours: 1,
@@ -77,6 +124,7 @@ watch(() => props.visible, (v) => {
   if (v) {
     loadSchedules(props.projectId)
     fetchChannels()
+    loadSkillCommands()
   }
 })
 
@@ -106,14 +154,17 @@ function describeCron(expr) {
 }
 
 async function submit() {
+  const promptText = form.value.skill_name
+    ? `/${form.value.skill_name} ${form.value.prompt}`.trim()
+    : form.value.prompt
   await saveNewSchedule({
     project_id: props.projectId,
     session_id: form.value.session_id || '',
     channel_id: form.value.channel_id || '',
     auto_unbind_after_run: form.value.auto_unbind_after_run,
     delete_session_on_success: form.value.delete_session_on_success,
-    name: form.value.name || 'Scheduled task',
-    prompt: form.value.prompt,
+    name: form.value.name || (form.value.skill_name ? `/${form.value.skill_name}` : 'Scheduled task'),
+    prompt: promptText,
     cron_expr: toCronExpr(form.value),
     enabled: true,
   })
@@ -121,6 +172,8 @@ async function submit() {
     form.value = {
       name: '',
       prompt: '',
+      skill_name: '',
+      skill_type: '',
       schedule_type: 'hourly',
       interval_minutes: 30,
       interval_hours: 1,
@@ -208,7 +261,49 @@ function taskAnchorLabel(task) {
                 type="time"
               />
               <div class="schedule-summary">{{ scheduleDescription }}</div>
-              <textarea v-model="form.prompt" placeholder="Describe the work this project session should run"></textarea>
+              <div class="skill-selector">
+                <label class="anchor-label">Skill / Command</label>
+                <div v-if="form.skill_name" class="skill-selected">
+                  <span class="skill-tag" :class="form.skill_type === 'skill' ? 'skill-tag--skill' : 'skill-tag--builtin'">
+                    /{{ form.skill_name }}
+                  </span>
+                  <button type="button" class="skill-clear" @click="clearSkill" aria-label="Clear skill">×</button>
+                  <button type="button" class="skill-change" @click="skillDropdownOpen = !skillDropdownOpen">Change</button>
+                </div>
+                <button v-else type="button" class="skill-trigger" @click="skillDropdownOpen = !skillDropdownOpen">
+                  {{ skillLoading ? 'Loading...' : 'Select Skill / Command (optional)' }}
+                </button>
+                <div v-if="skillDropdownOpen" class="skill-dropdown">
+                  <input
+                    v-model="skillSearch"
+                    class="skill-search"
+                    placeholder="Search skills..."
+                    type="text"
+                    @keydown.escape.stop="skillDropdownOpen = false"
+                  />
+                  <div class="skill-list">
+                    <div v-if="filteredSkillCommands.length === 0" class="skill-empty">
+                      {{ skillLoading ? 'Loading...' : 'No skills found' }}
+                    </div>
+                    <div
+                      v-for="cmd in filteredSkillCommands"
+                      :key="cmd.name"
+                      class="skill-item"
+                      @click="selectSkill(cmd)"
+                    >
+                      <span class="skill-item-name">/{{ cmd.name }}</span>
+                      <span class="skill-item-tag" :class="cmd.type === 'skill' ? 'skill-tag--skill' : 'skill-tag--builtin'">
+                        {{ cmd.type === 'skill' ? 'skill' : 'built-in' }}
+                      </span>
+                      <span class="skill-item-desc">{{ cmd.description }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <textarea
+                v-model="form.prompt"
+                :placeholder="form.skill_name ? `Arguments for /${form.skill_name} (optional)` : 'Describe the work this project session should run'"
+              ></textarea>
               <div class="anchor-field">
                 <label class="anchor-label">IM channel for each run</label>
                 <select v-model="form.channel_id">
@@ -227,7 +322,7 @@ function taskAnchorLabel(task) {
                 <input v-model="form.delete_session_on_success" type="checkbox" />
                 <span>Delete successful execution session</span>
               </label>
-              <button class="primary-btn" type="button" :disabled="saving || !form.prompt || !props.projectId" @click="submit">
+              <button class="primary-btn" type="button" :disabled="saving || (!form.prompt && !form.skill_name) || !props.projectId" @click="submit">
                 {{ saving ? 'Saving...' : 'Create Project Clock' }}
               </button>
             </section>
@@ -294,6 +389,27 @@ function taskAnchorLabel(task) {
 .anchor-field { display: flex; flex-direction: column; gap: 6px; }
 .anchor-label { font-size: 12px; color: var(--text-secondary); font-weight: 700; }
 .anchor-hint { font-size: 11px; line-height: 1.5; color: var(--text-muted); }
+.skill-selector { display: flex; flex-direction: column; gap: 6px; position: relative; }
+.skill-trigger { border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--border)); border-radius: 12px; background: color-mix(in srgb, var(--accent) 6%, transparent); color: var(--text-secondary); padding: 9px 10px; cursor: pointer; font-size: 12px; text-align: left; transition: border-color 180ms ease, color 180ms ease, background 180ms ease; }
+.skill-trigger:hover { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.skill-selected { display: flex; align-items: center; gap: 8px; }
+.skill-tag { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; font-family: var(--font-mono); font-size: 12px; font-weight: 700; }
+.skill-tag--skill { color: var(--purple, #a855f7); background: color-mix(in srgb, var(--purple, #a855f7) 14%, transparent); border: 1px solid color-mix(in srgb, var(--purple, #a855f7) 32%, var(--border)); }
+.skill-tag--builtin { color: var(--text-muted); background: color-mix(in srgb, var(--bg-tertiary) 60%, transparent); border: 1px solid var(--border); }
+.skill-clear { width: 22px; height: 22px; border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--text-muted); font-size: 14px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: color 180ms ease, border-color 180ms ease; }
+.skill-clear:hover { color: var(--danger, #ef4444); border-color: var(--danger, #ef4444); }
+.skill-change { border: 1px solid var(--border); border-radius: 10px; background: var(--bg-secondary); color: var(--text-muted); padding: 3px 8px; cursor: pointer; font-size: 11px; transition: color 180ms ease, border-color 180ms ease; }
+.skill-change:hover { color: var(--accent); border-color: var(--accent); }
+.skill-dropdown { position: absolute; top: 100%; left: 0; right: 0; margin-top: 4px; z-index: 10; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg, 0 8px 24px rgba(0,0,0,0.15)); max-height: 240px; display: flex; flex-direction: column; overflow: hidden; }
+.skill-search { border: none; border-bottom: 1px solid var(--border); background: transparent; color: var(--text-primary); padding: 8px 10px; font-size: 12px; font-family: var(--font-sans); outline: none; }
+.skill-search::placeholder { color: var(--text-muted); }
+.skill-list { overflow-y: auto; padding: 4px; }
+.skill-item { display: flex; align-items: baseline; gap: 8px; padding: 7px 8px; border-radius: 8px; cursor: pointer; transition: background 120ms ease; }
+.skill-item:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.skill-item-name { font-family: var(--font-mono); font-size: 12px; color: var(--accent); white-space: nowrap; flex-shrink: 0; }
+.skill-item-tag { font-size: 9px; padding: 1px 5px; border-radius: 3px; white-space: nowrap; flex-shrink: 0; }
+.skill-item-desc { font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skill-empty { padding: 12px; text-align: center; color: var(--text-muted); font-size: 12px; }
 .schedule-option { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 12px; }
 .schedule-option input { width: auto; }
 .primary-btn { min-height: 38px; background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 78%, #ffffff)); border: 1px solid var(--accent); color: var(--text-on-accent); border-radius: 12px; padding: 9px 12px; cursor: pointer; font-weight: 800; transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease; }

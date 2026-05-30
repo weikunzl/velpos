@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from application.git_helpers import get_current_git_branch
+from application.git_helpers import get_current_git_branch, run_git
 
 from domain.session.model.message import Message
 from domain.session.model.session import Session
@@ -342,17 +342,10 @@ class SessionBranchApplicationService:
         return bool(output.strip())
 
     async def _run_git_checked(self, project_dir: str, args: list[str], message: str) -> None:
-        try:
-            await asyncio.to_thread(
-                subprocess.run,
-                ["git", "-C", project_dir, *args],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-        except subprocess.CalledProcessError as exc:
-            detail = (exc.stderr or exc.stdout or "").strip()
-            raise BusinessException(f"{message}: {detail}" if detail else message) from exc
+        result = await run_git(project_dir, *args)
+        if not result.ok:
+            detail = (result.stderr or result.stdout or "").strip()
+            raise BusinessException(f"{message}: {detail}" if detail else message)
 
     async def _remove_worktree(self, worktree_path: str) -> str:
         if not worktree_path or not Path(worktree_path).exists():
@@ -403,17 +396,8 @@ class SessionBranchApplicationService:
     async def _git_output(self, project_dir: str, args: list[str]) -> str:
         if not project_dir:
             return ""
-        try:
-            result = await asyncio.to_thread(
-                subprocess.run,
-                ["git", "-C", project_dir, *args],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            return result.stdout.strip()
-        except Exception:
-            return ""
+        result = await run_git(project_dir, *args)
+        return result.stdout if result.ok else ""
 
     @staticmethod
     def _build_analysis_prompt(compare_result: dict[str, Any]) -> str:
