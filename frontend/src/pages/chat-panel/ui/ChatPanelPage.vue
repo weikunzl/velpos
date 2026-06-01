@@ -23,6 +23,7 @@ import { TaskProgressPanel, useTaskProgress } from '@features/task-progress'
 import TeamRuntimePanel from '@features/agent-teams/ui/TeamRuntimePanel.vue'
 import WorkerSessionBreadcrumb from '@features/agent-teams/ui/WorkerSessionBreadcrumb.vue'
 import { usePermissionMode } from '../model/usePermissionMode'
+import { useViewport } from '@shared/lib/useViewport'
 
 const {
   session, messages, status, queued, canceling, cancelledHint, waitingForSlot, recovery, currentSessionId,
@@ -30,6 +31,7 @@ const {
   restoredPrompt, setRestoredPrompt,
 } = useSession()
 const { currentProject, updateProjectInList } = useProject()
+const { isMobile } = useViewport()
 
 const wsConnection = inject('wsConnection')
 
@@ -263,12 +265,30 @@ function toggleUsagePanel() {
   }
 }
 
-const historyPanelStyle = computed(() => ({
-  position: 'fixed',
-  left: historyPanelPos.value.left + 'px',
-  bottom: historyPanelPos.value.bottom + 'px',
-  zIndex: 9999,
-}))
+const HISTORY_PANEL_WIDTH = 360
+const historyPanelStyle = computed(() => {
+  // 移动端：全宽底部 sheet，不依赖按钮坐标
+  if (isMobile.value) {
+    return {
+      position: 'fixed',
+      left: '0',
+      right: '0',
+      bottom: '0',
+      width: '100%',
+      zIndex: 9999,
+    }
+  }
+  // 桌面端：夹紧 left，避免右侧溢出；最少留 12px 内边距
+  const rawLeft = historyPanelPos.value.left
+  const maxLeft = window.innerWidth - HISTORY_PANEL_WIDTH - 12
+  const clampedLeft = Math.max(12, Math.min(rawLeft, maxLeft))
+  return {
+    position: 'fixed',
+    left: clampedLeft + 'px',
+    bottom: historyPanelPos.value.bottom + 'px',
+    zIndex: 9999,
+  }
+})
 
 function formatTokens(n) {
   const value = Number(n) || 0
@@ -2010,6 +2030,19 @@ function formatMaxTokens(n) {
   margin-left: 8px;
 }
 
+/*
+ * 工具栏内所有按钮统一高度 30px，覆盖 glass-btn（32px）等外部基类的差异。
+ * 用 :where() 降低优先级，让 toolbar-btn--active 等修饰类可以正常覆盖颜色。
+ */
+:where(.input-toolbar) .glass-btn,
+:where(.input-toolbar) .cmd-btn,
+:where(.input-toolbar) .clear-ctx-btn {
+  height: 30px;
+  min-height: 30px;
+  padding: 0 8px;
+  box-sizing: border-box;
+}
+
 .toolbar-btn {
   position: relative;
   display: inline-flex;
@@ -2020,6 +2053,7 @@ function formatMaxTokens(n) {
   border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border));
   padding: 6px 8px;
   min-height: 30px;
+  height: 30px;
   border-radius: var(--radius-md);
   font-size: 11px;
   cursor: pointer;
@@ -2688,6 +2722,19 @@ function formatMaxTokens(n) {
   overflow: hidden;
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+/* 移动端：history-panel 变底部全宽 sheet */
+@media (max-width: 768px) {
+  .history-panel {
+    width: 100%;
+    max-width: 100%;
+    max-height: 60dvh;
+    max-height: 60vh;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    border-bottom: none;
+    padding-bottom: var(--safe-bottom, 0px);
+  }
 }
 
 .history-header {
