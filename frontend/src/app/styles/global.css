@@ -788,6 +788,44 @@ textarea:focus-visible {
   justify-content: center;
 }
 
+/* 移动端：Dialog 变底部 Sheet 样式 */
+@media (max-width: 768px) {
+  .dialog-overlay {
+    align-items: flex-end;
+    justify-content: stretch;
+  }
+
+  /* 直接子面板：圆角顶部 + 最大高度 90dvh + safe-area 底部 */
+  .dialog-overlay > .dialog,
+  .dialog-overlay > .settings-dialog,
+  .dialog-overlay > .plugin-dialog,
+  .dialog-overlay > .memory-dialog,
+  .dialog-overlay > .scheduler-dialog,
+  .dialog-overlay > .evolution-dialog,
+  .dialog-overlay > .agent-dialog {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 90dvh;
+    max-height: 90vh; /* fallback */
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    border-bottom: none;
+    padding-bottom: var(--safe-bottom, 0px);
+    animation: mobile-dialog-slide-in var(--motion-emphasis) var(--ease-spring) both;
+  }
+
+  /* 关闭按钮扩大触摸区域 */
+  .close-btn {
+    width: var(--touch-target);
+    height: var(--touch-target);
+    font-size: 22px;
+  }
+}
+
+@keyframes mobile-dialog-slide-in {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
 .dialog-header {
   display: flex;
   align-items: center;
