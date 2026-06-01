@@ -3112,7 +3112,7 @@ button.dash-chip[disabled] {
   }
 }
 
-/* Mobile: enforce minimum font size */
+/* Mobile: enforce minimum font size + horizontal scroll for chips */
 @media (max-width: 768px) {
   .dash-chip {
     font-size: 12px;
@@ -3120,6 +3120,24 @@ button.dash-chip[disabled] {
   .context-track-label,
   .context-pct {
     font-size: 11px;
+  }
+
+  /* 防止 chips 在窄屏换行堆叠，改为单行横向滚动 */
+  .dash-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .dash-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* session-dashboard 底部加上 Home-bar 安全距离 */
+  .session-dashboard {
+    padding-bottom: calc(14px + var(--safe-bottom, 0px));
   }
 }
 
