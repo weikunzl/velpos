@@ -1245,11 +1245,7 @@ defineExpose({ scrollToSession })
   opacity: 0;
 }
 
-@media (max-width: 768px) {
-  .session-sidebar {
-    display: none;
-  }
-}
+/* 移动端可见性由 App.vue 的抽屉容器（.main-sidebar）统一控制，此处不再隐藏 */
 
 /* Confirm swap transition */
 .confirm-swap-enter-active,
