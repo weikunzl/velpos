@@ -24,6 +24,7 @@ import { useHotkeyHint } from '@shared/lib/useHotkeyHint'
 import { useViewport } from '@shared/lib/useViewport'
 import MobileHeader from '@features/mobile-nav/ui/MobileHeader.vue'
 import MobileNavStack from '@features/mobile-nav/ui/MobileNavStack.vue'
+import MobileMoreSheet from '@features/mobile-nav/ui/MobileMoreSheet.vue'
 
 const {
   session,
@@ -113,6 +114,7 @@ const isSidebarCollapsed = ref(
   localStorage.getItem('pf_sidebar_collapsed') === 'true'
 )
 const isMobileNavOpen = ref(false)
+const isMobileMoreOpen = ref(false)
 const { isMobile } = useViewport()
 
 function toggleSidebar() {
@@ -684,7 +686,7 @@ useGlobalHotkeys({
       <MobileHeader
         v-if="isMobile"
         @open-nav="isMobileNavOpen = true"
-        @open-more="settingsDialogVisible = true"
+        @open-more="isMobileMoreOpen = true"
         @notification-navigate="handleNotificationNavigate"
       />
       <!-- 桌面顶栏 -->
@@ -828,6 +830,20 @@ useGlobalHotkeys({
         @new-project="handleCreate"
         @new-session="handleMobileNewSession"
       />
+
+      <!-- 移动端「更多操作」Sheet -->
+      <Teleport to="body">
+        <Transition name="more-sheet">
+          <MobileMoreSheet
+            v-if="isMobile && isMobileMoreOpen"
+            @close="isMobileMoreOpen = false"
+            @open-settings="settingsDialogVisible = true"
+            @open-git="gitManagerVisible = true"
+            @open-workspace="workspaceVisible = !workspaceVisible"
+            @open-terminal="terminalDrawerVisible = !terminalDrawerVisible"
+          />
+        </Transition>
+      </Teleport>
     </template>
   </div>
 </template>
@@ -1265,5 +1281,16 @@ useGlobalHotkeys({
   .skel-sidebar {
     display: none;
   }
+}
+
+/* MobileMoreSheet 进出动画 */
+.more-sheet-enter-active,
+.more-sheet-leave-active {
+  transition: opacity var(--motion-fast) var(--ease-smooth);
+}
+
+.more-sheet-enter-from,
+.more-sheet-leave-to {
+  opacity: 0;
 }
 </style>
