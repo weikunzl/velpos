@@ -21,6 +21,9 @@ import GlobalShortcutInterceptor from '@shared/ui/GlobalShortcutInterceptor.vue'
 import AppLogo from '@shared/ui/AppLogo.vue'
 import { useGlobalHotkeys } from '@shared/lib/useGlobalHotkeys'
 import { useHotkeyHint } from '@shared/lib/useHotkeyHint'
+import { useViewport } from '@shared/lib/useViewport'
+import MobileHeader from '@features/mobile-nav/ui/MobileHeader.vue'
+import MobileNavStack from '@features/mobile-nav/ui/MobileNavStack.vue'
 
 const {
   session,
@@ -109,9 +112,23 @@ const isMobileSidebarOpen = ref(false)
 const isSidebarCollapsed = ref(
   localStorage.getItem('pf_sidebar_collapsed') === 'true'
 )
+const isMobileNavOpen = ref(false)
+const { isMobile } = useViewport()
 
 function toggleSidebar() {
-  isMobileSidebarOpen.value = !isMobileSidebarOpen.value
+  if (isMobile.value) {
+    isMobileNavOpen.value = true
+  } else {
+    isMobileSidebarOpen.value = !isMobileSidebarOpen.value
+  }
+}
+
+function handleMobileSessionSelect(session) {
+  switchSession(session.session_id)
+}
+
+function handleMobileNewSession(projectId) {
+  handleCreateInProject(projectId)
 }
 
 function toggleSidebarCollapse() {
@@ -137,12 +154,13 @@ function handleNotificationNavigate(sessionId) {
 }
 
 function handleLocateSession() {
+  if (isMobile.value) {
+    isMobileNavOpen.value = true
+    return
+  }
   if (isSidebarCollapsed.value) {
     isSidebarCollapsed.value = false
     localStorage.setItem('pf_sidebar_collapsed', false)
-  }
-  if (window.innerWidth <= 768) {
-    isMobileSidebarOpen.value = true
   }
   sidebarRef.value?.scrollToSession(currentSessionId.value)
 }
@@ -571,8 +589,11 @@ function handleSessionImported(event) {
     isSidebarCollapsed.value = false
     localStorage.setItem('pf_sidebar_collapsed', false)
   }
-  if (window.innerWidth <= 768) {
-    isMobileSidebarOpen.value = true
+  if (isMobile.value) {
+    isMobileNavOpen.value = true
+  } else if (isSidebarCollapsed.value) {
+    isSidebarCollapsed.value = false
+    localStorage.setItem('pf_sidebar_collapsed', false)
   }
   // Wait for DOM to update then scroll to the new session position
   nextTick(() => {
@@ -659,7 +680,15 @@ useGlobalHotkeys({
 
     <!-- Real UI: shown after ready or on error -->
     <template v-else>
-      <header class="app-header">
+      <!-- 移动端精简顶栏 -->
+      <MobileHeader
+        v-if="isMobile"
+        @open-nav="isMobileNavOpen = true"
+        @open-more="settingsDialogVisible = true"
+        @notification-navigate="handleNotificationNavigate"
+      />
+      <!-- 桌面顶栏 -->
+      <header v-else class="app-header">
         <div class="header-left">
           <button class="mobile-menu-btn" @click="toggleSidebar" aria-label="Toggle menu">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -788,6 +817,16 @@ useGlobalHotkeys({
         :project-id="schedulerProjectId"
         session-id=""
         @close="closeProjectScheduler"
+      />
+
+      <!-- 移动端全屏导航栈（项目 → 会话选择） -->
+      <MobileNavStack
+        v-model:visible="isMobileNavOpen"
+        :sessions="sessions"
+        :current-session-id="currentSessionId"
+        @session-select="handleMobileSessionSelect"
+        @new-project="handleCreate"
+        @new-session="handleMobileNewSession"
       />
     </template>
   </div>
