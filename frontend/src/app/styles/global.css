@@ -245,6 +245,12 @@
 
   --touch-target: 44px;
 
+  /* iOS 刘海 / Home-bar 安全区，viewport-fit=cover 时生效 */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+
   font-family: var(--font-sans);
   font-size: 14px;
   line-height: 1.6;
@@ -255,7 +261,9 @@
 }
 
 body {
-  min-height: 100vh;
+  /* dvh 在软键盘弹起时会收缩，避免输入框被遮住；旧浏览器回退到 100vh */
+  min-height: 100dvh;
+  min-height: 100vh; /* fallback */
   overflow: hidden;
   background:
     radial-gradient(circle at 16% 8%, var(--accent-dim), transparent 32%),

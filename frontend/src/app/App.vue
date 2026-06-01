@@ -795,7 +795,8 @@ useGlobalHotkeys({
 
 <style scoped>
 .app-layout {
-  height: 100vh;
+  height: 100vh; /* fallback */
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   background:
@@ -999,6 +1000,16 @@ useGlobalHotkeys({
   .sidebar-collapse-area,
   .sidebar-collapse-btn {
     display: none;
+  }
+
+  /* iPhone 刘海顶部 & Home-bar 底部安全距离 */
+  .app-header {
+    padding-top: var(--safe-top);
+    height: calc(48px + var(--safe-top));
+  }
+
+  .app-body {
+    padding-bottom: var(--safe-bottom) !important;
   }
 }
 
