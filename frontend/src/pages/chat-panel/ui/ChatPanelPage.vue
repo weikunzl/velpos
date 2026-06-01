@@ -3139,6 +3139,33 @@ button.dash-chip[disabled] {
   .session-dashboard {
     padding-bottom: calc(14px + var(--safe-bottom, 0px));
   }
+
+  /* 工具栏：隐藏开发者 Group 1（Debug/Runtime/Team），其余横向滚动 */
+  .input-toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .input-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Group 1 = 第一个 .toolbar-group（Debug / Runtime / Team） */
+  .input-toolbar > .toolbar-group:first-child {
+    display: none;
+  }
+
+  /* 按钮触摸区域扩展到 44px */
+  .toolbar-btn {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+    padding: 0 10px;
+    justify-content: center;
+  }
 }
 
 
