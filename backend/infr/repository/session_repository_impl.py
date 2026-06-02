@@ -4,6 +4,7 @@ import json
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.session.model.message import Message
@@ -165,4 +166,7 @@ class SessionRepositoryImpl(SessionRepository):
         await self._session.rollback()
 
     async def close(self) -> None:
-        await self._session.close()
+        try:
+            await self._session.close()
+        except OperationalError:
+            await self._session.invalidate()

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { formatRelativeTime } from '@shared/lib/formatTime'
+import SessionListSwipeItem from './SessionListSwipeItem.vue'
 
 const props = defineProps({
   /** 当前项目信息 */
@@ -11,9 +11,30 @@ const props = defineProps({
   currentSessionId: { type: String, default: null },
 })
 
-const emit = defineEmits(['select', 'back', 'close', 'new-session'])
+const emit = defineEmits(['select', 'back', 'close', 'new-session', 'delete', 'copy'])
 
 const keyword = ref('')
+const openSwipeId = ref(null)
+/** 向子组件传递纯字符串，避免 Ref 对象进入 prop 导致 watch 误重置 */
+const openSwipeIdForItems = computed(() => openSwipeId.value)
+
+function onSwipeOpen(sessionId) {
+  openSwipeId.value = sessionId
+}
+
+function onSwipeClose() {
+  openSwipeId.value = null
+}
+
+function onDelete(sessionId) {
+  openSwipeId.value = null
+  emit('delete', sessionId)
+}
+
+function handleBack() {
+  openSwipeId.value = null
+  emit('back')
+}
 
 const filteredSessions = computed(() => {
   const kw = keyword.value.trim().toLowerCase()
@@ -25,17 +46,7 @@ const filteredSessions = computed(() => {
   )
 })
 
-function statusColor(session) {
-  if (session.status === 'running') return 'running'
-  if (session.status === 'waiting') return 'waiting'
-  return ''
-}
 
-function sessionLabel(session) {
-  if (session.status === 'running') return '运行中'
-  if (session.status === 'waiting') return '等待输入'
-  return ''
-}
 </script>
 
 <template>
@@ -43,7 +54,7 @@ function sessionLabel(session) {
     <div class="sl-sheet">
       <!-- 顶部栏 -->
       <div class="sl-header">
-        <button class="sl-back-btn" @click="$emit('back')" aria-label="返回项目列表">
+        <button class="sl-back-btn" @click="handleBack" aria-label="返回项目列表">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="15 18 9 12 15 6"/>
           </svg>
@@ -79,33 +90,18 @@ function sessionLabel(session) {
         <div v-if="filteredSessions.length === 0" class="sl-empty">
           <span>{{ keyword ? '没有匹配的会话' : '还没有会话，点击 + 新建' }}</span>
         </div>
-        <button
+        <SessionListSwipeItem
           v-for="session in filteredSessions"
           :key="session.session_id"
-          class="sl-item"
-          :class="{ active: session.session_id === currentSessionId }"
-          @click="$emit('select', session)"
-        >
-          <!-- 状态指示点 -->
-          <span
-            class="sl-status-dot"
-            :class="statusColor(session)"
-          ></span>
-
-          <span class="sl-item-body">
-            <span class="sl-item-name">{{ session.name || session.session_id }}</span>
-            <span class="sl-item-meta">
-              <span v-if="sessionLabel(session)" class="sl-status-label" :class="statusColor(session)">
-                {{ sessionLabel(session) }}
-              </span>
-              <span v-else class="sl-item-time">{{ formatRelativeTime(session.updated_at || session.created_at) }}</span>
-            </span>
-          </span>
-
-          <svg v-if="session.session_id === currentSessionId" class="sl-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="20 6 9 17 4 12"/>
-          </svg>
-        </button>
+          :session="session"
+          :active="session.session_id === currentSessionId"
+          :open-swipe-id="openSwipeIdForItems"
+          @select="$emit('select', $event)"
+          @delete="onDelete"
+          @copy="$emit('copy', $event)"
+          @swipe-open="onSwipeOpen"
+          @swipe-close="onSwipeClose"
+        />
       </div>
     </div>
   </div>
@@ -250,100 +246,8 @@ function sessionLabel(session) {
   font-size: 14px;
 }
 
-.sl-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 12px 10px;
-  border-radius: var(--radius-md);
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  transition: background var(--transition-fast);
-  text-align: left;
-  min-height: var(--touch-target);
-}
-
-.sl-item:hover,
-.sl-item:active {
-  background: var(--bg-hover);
-}
-
-.sl-item.active {
-  background: var(--accent-dim);
-}
-
-.sl-item + .sl-item {
+.sl-list :deep(.sl-swipe-row + .sl-swipe-row) {
   border-top: 1px solid var(--border-subtle);
-}
-
-.sl-status-dot {
-  width: 8px;
-  height: 8px;
-  min-width: 8px;
-  border-radius: 50%;
-  background: var(--border);
-  flex-shrink: 0;
-}
-
-.sl-status-dot.running {
-  background: var(--status-running);
-  animation: sl-pulse 1.5s ease-in-out infinite;
-}
-
-.sl-status-dot.waiting {
-  background: var(--status-waiting);
-}
-
-.sl-item-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.sl-item-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sl-item.active .sl-item-name {
-  color: var(--accent);
-}
-
-.sl-item-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.sl-item-time {
-  font-size: 11px;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-}
-
-.sl-status-label {
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.sl-status-label.running { color: var(--status-running); }
-.sl-status-label.waiting { color: var(--status-waiting); }
-
-.sl-check {
-  flex-shrink: 0;
-}
-
-@keyframes sl-pulse {
-  0%, 100% { opacity: 1; box-shadow: 0 0 4px var(--status-running); }
-  50% { opacity: 0.5; box-shadow: 0 0 8px var(--status-running); }
 }
 
 @keyframes sl-bg-in {

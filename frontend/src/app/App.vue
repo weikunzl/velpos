@@ -57,6 +57,7 @@ const {
   loadSessions,
   handleCreate,
   handleDelete,
+  handleCopySession,
   handleBatchDelete,
   handleRename,
   handleCreateInProject,
@@ -128,6 +129,7 @@ function toggleSidebar() {
 
 function handleMobileSessionSelect(session) {
   switchSession(session.session_id)
+  isMobileNavOpen.value = false
 }
 
 function handleMobileNewSession(projectId) {
@@ -513,6 +515,21 @@ async function onDeleteSession(sessionId) {
   await handleDelete(sessionId)
 }
 
+async function onCopySession(sessionId) {
+  try {
+    await handleCopySession(sessionId)
+    if (isMobile.value) {
+      isMobileNavOpen.value = false
+    }
+  } catch (e) {
+    console.error('Copy session failed:', e)
+    const targetId = currentSessionId.value || sessionId
+    if (targetId) {
+      setErrorFor(targetId, e.message || '复制会话失败')
+    }
+  }
+}
+
 async function onBatchDeleteSessions(sessionIds) {
   for (const id of sessionIds) {
     forceCloseConnection(id)
@@ -602,9 +619,7 @@ function handleSessionImported(event) {
     isSidebarCollapsed.value = false
     localStorage.setItem('pf_sidebar_collapsed', false)
   }
-  if (isMobile.value) {
-    isMobileNavOpen.value = true
-  } else if (isSidebarCollapsed.value) {
+  if (!isMobile.value && isSidebarCollapsed.value) {
     isSidebarCollapsed.value = false
     localStorage.setItem('pf_sidebar_collapsed', false)
   }
@@ -746,6 +761,7 @@ useGlobalHotkeys({
           @create="handleCreate"
           @select="handleSessionSelect"
           @delete="onDeleteSession"
+          @copy="onCopySession"
           @batch-delete="onBatchDeleteSessions"
           @rename="handleRename"
           @create-in-project="handleCreateInProject"
@@ -840,6 +856,8 @@ useGlobalHotkeys({
         @session-select="handleMobileSessionSelect"
         @new-project="handleCreate"
         @new-session="handleMobileNewSession"
+        @delete-session="onDeleteSession"
+        @copy-session="onCopySession"
       />
 
       <!-- 移动端「更多操作」Sheet -->

@@ -26,7 +26,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['select', 'delete', 'rename', 'toggle-select', 'toggle-pin'])
+const emit = defineEmits(['select', 'delete', 'copy', 'rename', 'toggle-select', 'toggle-pin'])
 
 const isClaudeCode = computed(() => props.session.source === 'claude-code')
 
@@ -34,7 +34,7 @@ const showDeleteConfirm = ref(false)
 const editing = ref(false)
 const editName = ref('')
 const editInput = ref(null)
-const copySuccess = ref(false)
+const copying = ref(false)
 const { set: setTimer, clear: clearTimer } = useTimeout()
 let confirmTimerId = null
 
@@ -104,16 +104,13 @@ function cancelEditing() {
   editing.value = false
 }
 
-async function copySessionId() {
-  try {
-    await navigator.clipboard.writeText(props.session.session_id)
-    copySuccess.value = true
-    setTimer(() => {
-      copySuccess.value = false
-    }, 1500)
-  } catch (err) {
-    console.error('Failed to copy session ID:', err)
-  }
+function requestCopy() {
+  if (copying.value || isClaudeCode.value) return
+  copying.value = true
+  emit('copy', props.session.session_id)
+  setTimer(() => {
+    copying.value = false
+  }, 800)
 }
 </script>
 
@@ -174,18 +171,17 @@ async function copySessionId() {
               </svg>
             </button>
             <button
+              v-if="!isClaudeCode"
               class="copy-btn"
-              @click.stop="copySessionId"
-              :class="{ 'copy-success': copySuccess }"
-              aria-label="Copy session ID"
-              title="Copy session ID"
+              :class="{ copying }"
+              :disabled="copying"
+              @click.stop="requestCopy"
+              aria-label="复制会话"
+              title="复制会话"
             >
-              <svg v-if="!copySuccess" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-              </svg>
-              <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="20 6 9 17 4 12"/>
               </svg>
             </button>
             <button
@@ -400,12 +396,9 @@ async function copySessionId() {
   color: var(--accent);
 }
 
-.copy-btn.copy-success {
-  color: var(--green);
-}
-
-.copy-btn.copy-success:hover {
-  background: var(--green-dim);
+.copy-btn.copying {
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 .delete-btn {

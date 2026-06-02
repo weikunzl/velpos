@@ -45,6 +45,14 @@ async_session_factory = async_sessionmaker(
 )
 
 
+async def _safe_rollback(session: AsyncSession) -> None:
+    try:
+        await session.rollback()
+    except OperationalError:
+        logger.warning("DB rollback failed after connection loss; invalidating session", exc_info=True)
+        await session.invalidate()
+
+
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     async with async_session_factory() as session:
         try:
@@ -52,11 +60,11 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
             await session.commit()
         except PendingRollbackError:
             logger.warning("DB session in invalid transaction state, rolling back")
-            await session.rollback()
+            await _safe_rollback(session)
         except OperationalError:
             logger.error("DB commit failed (connection lost)", exc_info=True)
-            await session.rollback()
+            await _safe_rollback(session)
             raise
         except Exception:
-            await session.rollback()
+            await _safe_rollback(session)
             raise

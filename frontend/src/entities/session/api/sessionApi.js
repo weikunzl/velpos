@@ -8,6 +8,10 @@ export function listSessions() {
   return get('/sessions')
 }
 
+export function getSession(sessionId) {
+  return get(`/sessions/${sessionId}`)
+}
+
 export function deleteSession(sessionId, { cascade = false } = {}) {
   const query = cascade ? '?cascade=true' : ''
   return del(`/sessions/${sessionId}${query}`)

@@ -3,11 +3,13 @@ import { useSession } from '@entities/session'
 import { useProject } from '@entities/project'
 import {
   listSessions,
+  getSession,
   createSession,
   deleteSession,
   batchDeleteSessions,
   renameSession,
   importClaudeSession,
+  createSessionBranch,
 } from '@entities/session'
 import {
   listProjects,
@@ -156,6 +158,50 @@ export function useSessionList() {
       for (const id of deletedIds) removeState(id)
       localStorage.removeItem(LAST_SESSION_ID_KEY)
     }
+  }
+
+  function buildCopySessionName(session) {
+    const base = (session.name || session.session_id || 'session').trim()
+    return base.endsWith(' copy') ? `${base} 2` : `${base} copy`
+  }
+
+  async function handleCopySession(sessionId) {
+    const session = sessions.value.find((s) => s.session_id === sessionId)
+    if (!session) return null
+
+    if (session.source === 'claude-code') {
+      throw new Error('暂不支持复制 Claude Code 会话')
+    }
+
+    const detail = await getSession(sessionId)
+    if (detail.status === 'running' || detail.status === 'compacting') {
+      throw new Error('会话运行中，请稍后再复制')
+    }
+
+    const messageCount = detail.message_count ?? session.message_count ?? 0
+    const hasSdk = Boolean(detail.sdk_session_id || session.sdk_session_id)
+    const copyName = buildCopySessionName(session)
+    let created
+
+    if (messageCount === 0 && !hasSdk) {
+      created = await createSession({
+        projectId: session.project_id,
+        projectDir: session.project_dir || '',
+        name: copyName,
+      })
+      addSession({ ...created, source: 'velpos' })
+    } else {
+      const messageIndex = messageCount > 0 ? messageCount - 1 : 0
+      const data = await createSessionBranch(sessionId, messageIndex, copyName, 1, false)
+      created = data.sessions?.[0]
+      if (!created) {
+        throw new Error('复制会话失败')
+      }
+      addSession({ ...created, source: 'velpos' })
+    }
+
+    switchSession(created.session_id)
+    return created
   }
 
   async function handleDelete(sessionId) {
@@ -319,6 +365,7 @@ export function useSessionList() {
     loadSessions,
     handleCreate,
     handleDelete,
+    handleCopySession,
     handleBatchDelete,
     handleRename,
     handleCreateInProject,

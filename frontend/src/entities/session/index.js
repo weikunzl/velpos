@@ -2,6 +2,7 @@ export { useSession } from './model/useSession'
 export {
   createSession,
   listSessions,
+  getSession,
   deleteSession,
   batchDeleteSessions,
   clearContext,

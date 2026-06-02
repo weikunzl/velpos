@@ -32,6 +32,7 @@ const emit = defineEmits([
   'create',
   'select',
   'delete',
+  'copy',
   'batch-delete',
   'rename',
   'create-in-project',
@@ -620,6 +621,7 @@ defineExpose({ scrollToSession })
               class="indented-session"
               @select="emit('select', $event)"
               @delete="emit('delete', $event)"
+              @copy="emit('copy', $event)"
               @rename="emit('rename', $event)"
               @toggle-select="toggleSelect"
               @toggle-pin="toggleSessionPin"

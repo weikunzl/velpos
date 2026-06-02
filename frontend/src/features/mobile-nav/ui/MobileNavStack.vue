@@ -9,6 +9,8 @@
  *   session-select(session)  — 用户最终选中了某个会话
  *   new-project              — 需要新建项目
  *   new-session(projectId)   — 需要在指定项目下新建会话
+ *   delete-session(sessionId) — 删除指定会话
+ *   copy-session(sessionId)   — 复制会话并切换到新会话
  */
 import { ref, computed } from 'vue'
 import { useProject } from '@entities/project'
@@ -26,6 +28,8 @@ const emit = defineEmits([
   'session-select',
   'new-project',
   'new-session',
+  'delete-session',
+  'copy-session',
 ])
 
 // 'project' | 'sessions'
@@ -95,6 +99,8 @@ function onNewSession() {
           @back="onBack"
           @close="close"
           @new-session="onNewSession"
+          @delete="$emit('delete-session', $event)"
+          @copy="$emit('copy-session', $event)"
         />
       </template>
     </Transition>
