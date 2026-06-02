@@ -1399,7 +1399,7 @@ function formatMaxTokens(n) {
           </span>
           <span class="context-pct">{{ contextUsage.percent }}%</span>
         </button>
-        <div class="dash-row">
+        <div class="dash-row" @click.stop>
           <div class="dropdown-wrapper" v-if="projectDir" @click.stop>
             <button
               class="dash-chip dash-project"
@@ -3141,12 +3141,10 @@ button.dash-chip[disabled] {
 
 /* Touch device: expand hit area to 44x44px without changing visual size */
 @media (pointer: coarse) {
-  .toolbar-btn,
-  button.dash-chip {
+  .toolbar-btn {
     position: relative;
   }
-  .toolbar-btn::after,
-  button.dash-chip::after {
+  .toolbar-btn::after {
     content: '';
     position: absolute;
     top: 50%;
@@ -3177,13 +3175,26 @@ button.dash-chip[disabled] {
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     padding-bottom: 2px;
+    touch-action: pan-x;
+    overscroll-behavior-x: contain;
   }
   .dash-row::-webkit-scrollbar {
     display: none;
   }
+  .dash-row > * {
+    flex-shrink: 0;
+  }
+
+  /* dash-chip 使用真实触摸尺寸，避免 ::after 热区在横向滚动行内互相遮挡 */
+  button.dash-chip {
+    min-height: var(--touch-target);
+    touch-action: manipulation;
+  }
 
   /* session-dashboard 底部加上 Home-bar 安全距离 */
   .session-dashboard {
+    position: relative;
+    z-index: 1;
     padding-bottom: calc(14px + var(--safe-bottom, 0px));
   }
 

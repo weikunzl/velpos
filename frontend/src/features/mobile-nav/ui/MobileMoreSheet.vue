@@ -6,7 +6,7 @@
  * Settings、Git、Theme、Workspace、Terminal、Working Sessions
  */
 import { useTheme } from '@shared/lib/useTheme'
-import { WorkingSessionsButton } from '@features/working-sessions'
+import { useWorkingSessions } from '@features/working-sessions'
 
 const emit = defineEmits([
   'close',
@@ -14,9 +14,11 @@ const emit = defineEmits([
   'open-git',
   'open-workspace',
   'open-terminal',
+  'open-working-sessions',
 ])
 
 const { theme, toggleTheme } = useTheme()
+const { workingCount } = useWorkingSessions()
 
 const themeLabel = {
   dark: '深色',
@@ -104,15 +106,15 @@ function nextThemeLabel() {
         </button>
 
         <!-- Working Sessions -->
-        <div class="ms-item ms-item--working">
-          <span class="ms-item-icon">
+        <button class="ms-item" @click="$emit('open-working-sessions')">
+          <span class="ms-item-icon ms-item-icon--badge">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
             </svg>
+            <span v-if="workingCount > 0" class="ms-badge">{{ workingCount > 9 ? '9+' : workingCount }}</span>
           </span>
           <span class="ms-item-label">进行中</span>
-          <WorkingSessionsButton class="ms-working-btn" @navigate="$emit('close')" />
-        </div>
+        </button>
       </div>
 
       <button class="ms-cancel" @click="$emit('close')">取消</button>
@@ -190,16 +192,34 @@ function nextThemeLabel() {
   color: var(--accent);
 }
 
-.ms-item--working {
-  cursor: default;
-  overflow: hidden;
-}
-
 .ms-item-icon {
   color: var(--text-secondary);
   display: flex;
   align-items: center;
   transition: color var(--transition-fast);
+}
+
+.ms-item-icon--badge {
+  position: relative;
+}
+
+.ms-badge {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--yellow, #f59e0b);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  pointer-events: none;
 }
 
 .ms-item:hover .ms-item-icon,
@@ -217,15 +237,6 @@ function nextThemeLabel() {
 .ms-item:hover .ms-item-label,
 .ms-item:active .ms-item-label {
   color: var(--accent);
-}
-
-/* WorkingSessionsButton 在格子中透明覆盖，保留其原有逻辑 */
-.ms-working-btn {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  width: 100%;
-  height: 100%;
 }
 
 .ms-cancel {

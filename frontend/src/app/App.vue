@@ -9,7 +9,7 @@ import { useTeamRuntime } from '@features/agent-teams/model/useTeamRuntime'
 import { ChatPanelPage } from '@pages/chat-panel'
 import { SessionSidebar, useSessionList } from '@features/session-list'
 import { NotificationBell, useNotifications } from '@features/notification-center'
-import { WorkingSessionsButton, useWorkingSessions } from '@features/working-sessions'
+import { WorkingSessionsButton, WorkingSessionsPanel, useWorkingSessions } from '@features/working-sessions'
 import { fetchSessionRunSteps } from '@features/task-progress'
 import { SettingsButton, SettingsDialog } from '@features/settings-manager'
 import { GitManagerButton, GitManagerDialog } from '@features/git-manager'
@@ -115,6 +115,7 @@ const isSidebarCollapsed = ref(
 )
 const isMobileNavOpen = ref(false)
 const isMobileMoreOpen = ref(false)
+const isMobileWorkingOpen = ref(false)
 const { isMobile } = useViewport()
 
 function toggleSidebar() {
@@ -153,6 +154,16 @@ function handleSessionSelect(id) {
 
 function handleNotificationNavigate(sessionId) {
   switchSession(sessionId)
+}
+
+function openMobileWorkingSessions() {
+  isMobileMoreOpen.value = false
+  isMobileWorkingOpen.value = true
+}
+
+function handleMobileWorkingNavigate(sessionId) {
+  isMobileWorkingOpen.value = false
+  handleNotificationNavigate(sessionId)
 }
 
 function handleLocateSession() {
@@ -841,7 +852,24 @@ useGlobalHotkeys({
             @open-git="gitManagerVisible = true"
             @open-workspace="workspaceVisible = !workspaceVisible"
             @open-terminal="terminalDrawerVisible = !terminalDrawerVisible"
+            @open-working-sessions="openMobileWorkingSessions"
           />
+        </Transition>
+      </Teleport>
+
+      <Teleport to="body">
+        <Transition name="more-sheet">
+          <div
+            v-if="isMobile && isMobileWorkingOpen"
+            class="mobile-working-root"
+            @click.self="isMobileWorkingOpen = false"
+          >
+            <WorkingSessionsPanel
+              variant="sheet"
+              @navigate="handleMobileWorkingNavigate"
+              @close="isMobileWorkingOpen = false"
+            />
+          </div>
         </Transition>
       </Teleport>
     </template>
@@ -1292,5 +1320,17 @@ useGlobalHotkeys({
 .more-sheet-enter-from,
 .more-sheet-leave-to {
   opacity: 0;
+}
+
+.mobile-working-root {
+  position: fixed;
+  inset: 0;
+  z-index: 210;
+  background: var(--overlay-glass);
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
 }
 </style>

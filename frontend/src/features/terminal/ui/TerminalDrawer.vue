@@ -4,6 +4,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { useDialogManager, useVisibleProxy, useEscapeToClose } from '@shared/lib/useDialogManager'
+import { useViewport } from '@shared/lib/useViewport'
 
 const props = defineProps({
   visible: { type: Boolean, required: true },
@@ -13,6 +14,7 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'height-change'])
 
+const { isMobile } = useViewport()
 const { useDialog } = useDialogManager()
 useDialog('terminal', useVisibleProxy(props, emit))
 useEscapeToClose(() => props.visible, () => emit('close'))
@@ -27,6 +29,9 @@ let resizeOnUp = null
 
 const activeTab = computed(() => tabs.value.find(tab => tab.id === activeTabId.value) || tabs.value[0])
 const activeStatus = computed(() => activeTab.value?.status || 'idle')
+const dockStyle = computed(() => (
+  isMobile.value ? {} : { height: `${drawerHeight.value}px` }
+))
 const terminalLocation = computed(() => {
   const cwd = activeTab.value?.cwd || props.projectDir || '~'
   return props.gitBranch ? `${cwd} (${props.gitBranch})` : cwd
@@ -231,7 +236,7 @@ function startResize(e) {
 }
 
 function emitHeight() {
-  emit('height-change', props.visible ? drawerHeight.value : 0)
+  emit('height-change', props.visible && !isMobile.value ? drawerHeight.value : 0)
 }
 
 watch(() => props.visible, (val) => {
@@ -260,17 +265,30 @@ watch(activeTabId, (newId, oldId) => {
 })
 
 watch(drawerHeight, () => {
+  if (isMobile.value) return
   emitHeight()
   nextTick(() => fitTerminal())
 })
 
+watch(isMobile, () => {
+  emitHeight()
+  if (props.visible) nextTick(() => fitTerminal())
+})
+
+function handleViewportResize() {
+  if (!props.visible || !isMobile.value) return
+  nextTick(() => fitTerminal())
+}
+
 onMounted(() => {
   emitHeight()
   if (props.visible) ensureActiveTerminal()
+  window.addEventListener('resize', handleViewportResize)
 })
 
 onBeforeUnmount(() => {
   emit('height-change', 0)
+  window.removeEventListener('resize', handleViewportResize)
   if (resizeOnMove) {
     window.removeEventListener('mousemove', resizeOnMove)
     window.removeEventListener('mouseup', resizeOnUp)
@@ -286,10 +304,11 @@ onBeforeUnmount(() => {
     <section
       v-if="visible"
       class="terminal-dock"
-      :style="{ height: drawerHeight + 'px' }"
+      :class="{ 'terminal-dock--mobile-fullscreen': isMobile }"
+      :style="dockStyle"
       aria-label="Terminal drawer"
     >
-      <div class="resize-handle" @mousedown="startResize"></div>
+      <div v-if="!isMobile" class="resize-handle" @mousedown="startResize"></div>
       <div class="terminal-tabs">
         <div
           v-for="tab in tabs"
@@ -493,5 +512,30 @@ onBeforeUnmount(() => {
 @keyframes pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.45; transform: scale(0.82); }
+}
+
+@media (max-width: 768px) {
+  .terminal-dock--mobile-fullscreen {
+    inset: 0;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    height: 100dvh;
+    height: 100vh;
+    max-height: none;
+    min-height: 0;
+    border: none;
+    border-radius: 0;
+    z-index: 250;
+    padding-top: var(--safe-top, 0px);
+    padding-bottom: var(--safe-bottom, 0px);
+    box-sizing: border-box;
+  }
+
+  .terminal-dock--mobile-fullscreen .btn-close {
+    width: var(--touch-target);
+    height: var(--touch-target);
+  }
 }
 </style>

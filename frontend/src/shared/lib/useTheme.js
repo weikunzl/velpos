@@ -34,9 +34,15 @@ export function useTheme() {
     }
   }
 
+  function toggleTheme() {
+    const idx = THEMES.indexOf(currentTheme.value)
+    currentTheme.value = THEMES[(idx + 1) % THEMES.length]
+  }
+
   return {
     theme: currentTheme,
     themes: THEMES,
     setTheme,
+    toggleTheme,
   }
 }

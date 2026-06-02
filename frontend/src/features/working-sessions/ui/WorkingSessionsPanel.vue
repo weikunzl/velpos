@@ -2,6 +2,14 @@
 import { formatDurationLong } from '@features/message-display'
 import { useWorkingSessions } from '../model/useWorkingSessions'
 
+defineProps({
+  variant: {
+    type: String,
+    default: 'dropdown',
+    validator: (value) => ['dropdown', 'sheet'].includes(value),
+  },
+})
+
 const emit = defineEmits(['navigate', 'close'])
 
 const { workingList } = useWorkingSessions()
@@ -17,14 +25,21 @@ function formatElapsed(startTime) {
 </script>
 
 <template>
-  <div class="working-panel">
+  <div class="working-panel" :class="`working-panel--${variant}`" @click.stop>
     <div class="panel-header">
-      <span class="panel-title">Working Sessions</span>
+      <span class="panel-title">{{ variant === 'sheet' ? '进行中的会话' : 'Working Sessions' }}</span>
       <span v-if="workingList.length" class="panel-count">{{ workingList.length }}</span>
+      <button
+        v-if="variant === 'sheet'"
+        class="panel-close"
+        type="button"
+        aria-label="关闭"
+        @click="$emit('close')"
+      >×</button>
     </div>
     <div class="panel-body">
       <div v-if="workingList.length === 0" class="empty-state">
-        No active sessions
+        {{ variant === 'sheet' ? '暂无进行中的会话' : 'No active sessions' }}
       </div>
       <div
         v-for="item in workingList"
@@ -170,5 +185,53 @@ function formatElapsed(startTime) {
   font-size: 11px;
   font-family: var(--font-mono);
   color: var(--text-muted);
+}
+
+.working-panel--sheet {
+  position: relative;
+  top: auto;
+  right: auto;
+  margin-top: 0;
+  width: 100%;
+  max-height: min(60dvh, 60vh);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  border-bottom: none;
+  padding-bottom: var(--safe-bottom, 0px);
+}
+
+.working-panel--sheet .panel-header {
+  padding-top: 14px;
+}
+
+.panel-close {
+  margin-left: auto;
+  width: var(--touch-target);
+  height: var(--touch-target);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.panel-close:hover,
+.panel-close:active {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.working-panel--sheet .working-item {
+  min-height: var(--touch-target);
+  align-items: center;
+}
+
+.working-panel--sheet .working-item:active {
+  background: var(--layer-active);
 }
 </style>
