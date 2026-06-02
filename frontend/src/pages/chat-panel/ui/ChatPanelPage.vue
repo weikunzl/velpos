@@ -24,6 +24,7 @@ import TeamRuntimePanel from '@features/agent-teams/ui/TeamRuntimePanel.vue'
 import WorkerSessionBreadcrumb from '@features/agent-teams/ui/WorkerSessionBreadcrumb.vue'
 import { usePermissionMode } from '../model/usePermissionMode'
 import { useViewport } from '@shared/lib/useViewport'
+import { useChatPanelTools } from '@shared/lib/useChatPanelTools'
 
 const {
   session, messages, status, queued, canceling, cancelledHint, waitingForSlot, recovery, currentSessionId,
@@ -32,6 +33,7 @@ const {
 } = useSession()
 const { currentProject, updateProjectInList } = useProject()
 const { isMobile } = useViewport()
+const { debugMode, runtimePanelVisible, toggleDebug, toggleRuntimePanel } = useChatPanelTools()
 
 const wsConnection = inject('wsConnection')
 
@@ -47,8 +49,6 @@ const recoveryHintText = computed(() => {
   if (recoveryQueued.value) return 'Queued prompt restored'
   return ''
 })
-const debugMode = ref(localStorage.getItem('pf_debug_mode') === 'true')
-const runtimePanelVisible = ref(localStorage.getItem('pf_runtime_panel') === 'true')
 
 const isTeamCoordinator = computed(() => {
   return currentProject.value?.project_type === 'team' && !session.value?.team_task_id
@@ -58,16 +58,6 @@ const teamPanelVisible = ref(false)
 
 function handleTeamNavigate({ sessionId }) {
   if (sessionId) setCurrentSessionId(sessionId)
-}
-
-function toggleDebug() {
-  debugMode.value = !debugMode.value
-  localStorage.setItem('pf_debug_mode', debugMode.value)
-}
-
-function toggleRuntimePanel() {
-  runtimePanelVisible.value = !runtimePanelVisible.value
-  localStorage.setItem('pf_runtime_panel', runtimePanelVisible.value)
 }
 
 function isTodoWriteBlock(block) {
@@ -1138,7 +1128,7 @@ function formatMaxTokens(n) {
       </Transition>
       <!-- Toolbar above input -->
       <div class="input-toolbar">
-        <!-- Group 1: Debug -->
+        <!-- Group 1: Debug / Runtime -->
         <div class="toolbar-group">
         <button
           class="toolbar-btn"
@@ -1177,8 +1167,9 @@ function formatMaxTokens(n) {
             <polyline points="7 10 10 13 17 8"/>
           </svg>
         </button>
+        </div>
+        <div v-if="isTeamCoordinator" class="toolbar-group toolbar-group--team">
         <button
-          v-if="isTeamCoordinator"
           class="toolbar-btn"
           :class="{ 'toolbar-btn--active': teamPanelVisible }"
           :aria-pressed="teamPanelVisible"
@@ -3198,7 +3189,7 @@ button.dash-chip[disabled] {
     padding-bottom: calc(14px + var(--safe-bottom, 0px));
   }
 
-  /* 工具栏：隐藏开发者 Group 1（Debug/Runtime/Team），其余横向滚动 */
+  /* 工具栏横向滚动；移动端仅隐藏 Team 组 */
   .input-toolbar {
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -3212,8 +3203,7 @@ button.dash-chip[disabled] {
     display: none;
   }
 
-  /* Group 1 = 第一个 .toolbar-group（Debug / Runtime / Team） */
-  .input-toolbar > .toolbar-group:first-child {
+  .input-toolbar > .toolbar-group--team {
     display: none;
   }
 
