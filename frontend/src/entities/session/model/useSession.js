@@ -25,6 +25,7 @@ function _ensureState(sessionId) {
       queued: false,
       canceling: false,
       cancelledHint: false,
+      queryStartedAt: null,
       _nextMsgId: 0,
     })
   }
@@ -88,6 +89,11 @@ const waitingForSlot = computed(() => {
 const recovery = computed(() => {
   const state = _stateMap.get(currentSessionId.value)
   return state?.session?.recovery || null
+})
+
+const queryStartedAt = computed(() => {
+  const state = _stateMap.get(currentSessionId.value)
+  return state?.queryStartedAt ?? null
 })
 
 // ── Targeted APIs (write to specific session by ID) ──
@@ -214,10 +220,24 @@ function upsertTimelineEventFor(sessionId, event) {
 function setStatusFor(sessionId, s) {
   const state = _ensureState(sessionId)
   if (!state) return
+  const prev = state.status
   state.status = s
+  if (s === 'running') {
+    if (prev !== 'running' && prev !== 'reconnecting') {
+      state.queryStartedAt = Date.now()
+    } else if (state.queryStartedAt == null) {
+      state.queryStartedAt = Date.now()
+    }
+  } else if (s === 'idle' || s === 'error') {
+    state.queryStartedAt = null
+  }
   if (s === 'idle') {
     state.queued = false
   }
+}
+
+function getQueryStartedAt(sessionId) {
+  return _stateMap.get(sessionId)?.queryStartedAt ?? null
 }
 
 function setQueuedFor(sessionId, val) {
@@ -334,6 +354,7 @@ export function useSession() {
     waitingForSlot,
     recovery,
     queryHistory,
+    queryStartedAt,
     restoredPrompt,
     // Global state
     sessions,
@@ -360,6 +381,7 @@ export function useSession() {
     setTimelineEventsFor,
     upsertTimelineEventFor,
     setStatusFor,
+    getQueryStartedAt,
     setQueuedFor,
     setErrorFor,
     setCancelingFor,

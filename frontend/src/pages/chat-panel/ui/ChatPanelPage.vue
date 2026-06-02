@@ -6,7 +6,7 @@ import { useDialogManager } from '@shared/lib/useDialogManager'
 import { useSession, listModels, createSessionBranch, listSessionBranches, compareSessions, convergeSessionBranches } from '@entities/session'
 import { useProject, getGitBranches, checkoutGitBranch } from '@entities/project'
 import { MessageInput, useSendMessage } from '@features/send-message'
-import { useCancelQuery } from '@features/cancel-query'
+import { useCancelQuery, QueryRuntimeBar, useQueryElapsed } from '@features/cancel-query'
 import { MessageList, ThinkingIndicator } from '@features/message-display'
 import { ClearContextButton, useClearContext } from '@features/clear-context'
 import { CommandPaletteButton, CommandPalettePopover, useCommandPalette } from '@features/command-palette'
@@ -28,7 +28,7 @@ import { useChatPanelTools } from '@shared/lib/useChatPanelTools'
 
 const {
   session, messages, status, queued, canceling, cancelledHint, waitingForSlot, recovery, currentSessionId,
-  queryHistory, setCurrentSessionId, updateSession, setError, setCanceling, addSession,
+  queryHistory, queryStartedAt, setCurrentSessionId, updateSession, setError, setCanceling, addSession,
   restoredPrompt, setRestoredPrompt,
 } = useSession()
 const { currentProject, updateProjectInList } = useProject()
@@ -437,17 +437,37 @@ async function handleBranchSelect(branch) {
 }
 
 const pendingSend = ref(false)
+const pendingSendStartedAt = ref(null)
 let pendingSendTimer = null
+
+const queryRuntimeActive = computed(() => isRunning.value || pendingSend.value)
+
+const queryRuntimeStartTime = computed(() => {
+  if (queryStartedAt.value) return queryStartedAt.value
+  if (pendingSend.value && pendingSendStartedAt.value) return pendingSendStartedAt.value
+  return null
+})
+
+const { elapsedLabel: queryElapsedLabel } = useQueryElapsed(queryRuntimeStartTime, queryRuntimeActive)
+
+const queryRuntimeStatusText = computed(() => {
+  if (waitingForSlot.value) return '等待执行槽位'
+  if (pendingSend.value && !isRunning.value) return '发送中'
+  if (queued.value) return '排队中'
+  return '执行中'
+})
 
 function handleSend(textOrData) {
   useSendMessage(wsConnection.value).sendPrompt(textOrData)
   pendingSend.value = true
+  pendingSendStartedAt.value = Date.now()
   clearTimeout(pendingSendTimer)
   pendingSendTimer = setTimeout(() => { pendingSend.value = false }, 5000)
 }
 
 watch(isRunning, (running) => {
   pendingSend.value = false
+  pendingSendStartedAt.value = null
   clearTimeout(pendingSendTimer)
   if (!running) setCanceling(false)
 })
@@ -1100,29 +1120,18 @@ function formatMaxTokens(n) {
       <!-- Runtime Panel (above toolbar) -->
       <Transition name="runtime-slide">
       <div v-if="runtimePanelVisible" class="runtime-panel">
-        <div class="runtime-content">
-          <template v-if="canceling">
-            <span class="runtime-dot cancel-dot"></span>
-            <span class="runtime-label" style="color: var(--warning, #e89a3c)">Cancelling...</span>
-          </template>
-          <template v-else-if="cancelledHint">
-            <svg class="runtime-cancelled-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            <span class="runtime-label" style="color: var(--yellow)">Cancelled</span>
-          </template>
-          <template v-else-if="(isRunning || pendingSend) && runtimeActivity">
-            <span class="runtime-dot"></span>
-            <span v-if="runtimeActivity.type === 'tool'" class="runtime-tool">{{ runtimeActivity.name }}</span>
-            <span v-if="runtimeActivity.type === 'tool' && runtimeActivity.detail" class="runtime-detail">{{ runtimeActivity.detail }}</span>
-            <span v-if="runtimeActivity.type === 'thinking'" class="runtime-thinking">Thinking</span>
-            <span v-if="runtimeActivity.type === 'thinking' && runtimeActivity.detail" class="runtime-detail">{{ runtimeActivity.detail }}</span>
-          </template>
-          <template v-else-if="isRunning || pendingSend">
-            <span class="runtime-dot"></span>
-            <span class="runtime-label">Processing...</span>
-          </template>
-          <template v-else>
-            <span class="runtime-idle">Idle</span>
-          </template>
+        <QueryRuntimeBar
+          :visible="queryRuntimeActive"
+          :canceling="canceling"
+          :elapsed="queryElapsedLabel"
+          :status-text="queryRuntimeStatusText"
+          :activity="runtimeActivity"
+          :show-stop="isRunning && !canceling"
+          compact
+          @stop="handleCancel"
+        />
+        <div v-if="!queryRuntimeActive" class="runtime-content">
+          <span class="runtime-idle">Idle</span>
         </div>
       </div>
       </Transition>
@@ -1331,7 +1340,15 @@ function formatMaxTokens(n) {
             </div>
             </div>
             <div class="history-list">
-              <div v-if="queryHistory.length === 0" class="history-empty">No queries yet</div>
+              <div v-if="queryRuntimeActive" class="history-item history-item--active">
+                <div class="history-item-row">
+                  <span class="history-index">●</span>
+                  <span class="history-duration">{{ queryElapsedLabel || '0s' }}</span>
+                  <span class="history-turns">{{ queryRuntimeStatusText }}</span>
+                </div>
+                <div class="history-item-tokens history-item-live">进行中</div>
+              </div>
+              <div v-if="queryHistory.length === 0 && !queryRuntimeActive" class="history-empty">No queries yet</div>
               <div
                 v-else
                 v-for="(q, i) in [...queryHistory].reverse()"
@@ -1365,6 +1382,16 @@ function formatMaxTokens(n) {
         />
         </div>
       </div>
+      <QueryRuntimeBar
+        v-if="queryRuntimeActive && !runtimePanelVisible"
+        :visible="true"
+        :canceling="canceling"
+        :elapsed="queryElapsedLabel"
+        :status-text="queryRuntimeStatusText"
+        :activity="runtimeActivity"
+        :show-stop="isRunning && !canceling"
+        @stop="handleCancel"
+      />
       <div class="input-row">
         <MessageInput ref="messageInputRef" :running="isRunning" :disabled="canceling" @send="handleSend" />
       </div>
@@ -2782,6 +2809,16 @@ function formatMaxTokens(n) {
 
 .history-item--error {
   border-left: 2px solid var(--red);
+}
+
+.history-item--active {
+  border-left: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--accent-dim) 35%, transparent);
+}
+
+.history-item-live {
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .history-item-row {
