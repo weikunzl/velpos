@@ -1391,12 +1391,13 @@ function formatMaxTokens(n) {
           <span class="context-pct">{{ contextUsage.percent }}%</span>
         </button>
         <div class="dash-row" @click.stop>
+          <div class="dash-row-scroll">
           <div class="dropdown-wrapper" v-if="projectDir" @click.stop>
             <button
               class="dash-chip dash-project"
               :class="{ 'dash-chip--copied': copiedChip === 'project' }"
               :title="projectDir"
-              @click="showProjectCopyMenu = !showProjectCopyMenu; showOpenWithMenu = false; showModelMenu = false; showPermMenu = false; showHistory = false"
+              @click.stop="showProjectCopyMenu = !showProjectCopyMenu; showOpenWithMenu = false; showModelMenu = false; showPermMenu = false; showHistory = false"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
@@ -1465,7 +1466,7 @@ function formatMaxTokens(n) {
             <button
               class="dash-chip dash-model"
               :disabled="!currentSessionId"
-              @click="showModelMenu = !showModelMenu; showPermMenu = false; showHistory = false"
+              @click.stop="showModelMenu = !showModelMenu; showPermMenu = false; showHistory = false"
               title="Switch model"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1497,7 +1498,7 @@ function formatMaxTokens(n) {
               class="dash-chip dash-branch"
               v-if="gitBranch || currentProject"
               :title="'Branch: ' + (branchCurrent || gitBranch || '(no branch)')"
-              @click="handleBranchClick"
+              @click.stop="handleBranchClick"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="6" y1="3" x2="6" y2="15"/>
@@ -1530,7 +1531,7 @@ function formatMaxTokens(n) {
               class="dash-chip dash-perm"
               :class="[getPermColorClass(currentPermMode)]"
               :disabled="!currentSessionId"
-              @click="showPermMenu = !showPermMenu; showModelMenu = false; showHistory = false"
+              @click.stop="showPermMenu = !showPermMenu; showModelMenu = false; showHistory = false"
               title="Permission mode"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1557,7 +1558,7 @@ function formatMaxTokens(n) {
               class="dash-chip dash-agent"
               :class="{ 'dash-chip--open': showTaskPanel, 'dash-agent--running': planTaskCounts.in_progress > 0 }"
               :aria-expanded="showTaskPanel"
-              @click="showTaskPanel = !showTaskPanel"
+              @click.stop="showTaskPanel = !showTaskPanel"
               :title="`Plan: ${planTaskCounts.completed}/${planTaskCounts.total}`"
             >
               <span v-if="planTaskCounts.in_progress > 0" class="agent-dot"></span>
@@ -1572,6 +1573,7 @@ function formatMaxTokens(n) {
               v-if="showTaskPanel"
               @close="showTaskPanel = false"
             />
+          </div>
           </div>
         </div>
         <div v-if="totalToolCalls > 0 || (projectUsageSummary?.budget_status?.state && projectUsageSummary.budget_status.state !== 'none')" class="dash-row tool-summary-row">
@@ -2948,6 +2950,15 @@ function formatMaxTokens(n) {
   flex-wrap: wrap;
 }
 
+.dash-row-scroll {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  width: 100%;
+  min-width: 0;
+}
+
 .tool-summary-row {
   padding-top: 2px;
 }
@@ -3158,21 +3169,28 @@ button.dash-chip[disabled] {
     font-size: 11px;
   }
 
-  /* 防止 chips 在窄屏换行堆叠，改为单行横向滚动 */
+  /* 防止 chips 在窄屏换行堆叠，改为单行横向滚动（滚动在内层，避免裁切 dropdown） */
   .dash-row {
+    flex-wrap: nowrap;
+    overflow: visible;
+    padding-bottom: 2px;
+  }
+
+  .dash-row-scroll {
     flex-wrap: nowrap;
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    padding-bottom: 2px;
     touch-action: pan-x;
     overscroll-behavior-x: contain;
   }
-  .dash-row::-webkit-scrollbar {
+
+  .dash-row-scroll::-webkit-scrollbar {
     display: none;
   }
-  .dash-row > * {
+
+  .dash-row-scroll > * {
     flex-shrink: 0;
   }
 
@@ -3180,6 +3198,64 @@ button.dash-chip[disabled] {
   button.dash-chip {
     min-height: var(--touch-target);
     touch-action: manipulation;
+  }
+
+  /* session dashboard 下拉在移动端改为底部 sheet，避免 overflow 裁切 */
+  .session-dashboard .dropdown-menu {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    max-height: min(60dvh, 60vh);
+    margin: 0;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    border-bottom: none;
+    padding: 8px 8px calc(8px + var(--safe-bottom, 0px));
+    z-index: 9999;
+    overflow-y: auto;
+  }
+
+  .session-dashboard .dropdown-submenu {
+    position: static;
+    left: auto;
+    bottom: auto;
+    top: auto;
+    min-width: 0;
+    margin-top: 4px;
+    box-shadow: none;
+    border: none;
+    background: transparent;
+    padding: 0 0 0 8px;
+  }
+
+  .session-dashboard .dropdown-item {
+    min-height: var(--touch-target);
+    display: flex;
+    align-items: center;
+  }
+
+  .session-dashboard .model-menu .dropdown-item {
+    align-items: flex-start;
+  }
+
+  .session-dashboard .dropdown-wrapper :deep(.task-panel) {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: 100%;
+    max-width: none;
+    max-height: min(60dvh, 60vh);
+    margin: 0;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    border-bottom: none;
+    padding-bottom: var(--safe-bottom, 0px);
+    z-index: 9999;
   }
 
   /* session-dashboard 底部加上 Home-bar 安全距离 */
