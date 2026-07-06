@@ -270,7 +270,7 @@ git commit -m "feat(acp): 映射 ACP 事件到 Velpos 消息"
 - Create: `backend/infr/client/acp/acp_gateway.py`
 - Create: `backend/tests/unit/test_acp_gateway_lifecycle.py`
 
-- [ ] **Step 1: Write lifecycle tests with fake transport**
+- [x] **Step 1: Write lifecycle tests with fake transport**
 
 Cover:
 - `connect()` starts transport, sends initialize/session/new/session/prompt, yields mapped messages
@@ -279,14 +279,14 @@ Cover:
 - `is_connected()`, `get_state()`, `mark_active()`/`mark_idle()` behave like Claude gateway expectations
 - process error or invalid JSON yields user-friendly error message
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 cd backend
 uv run python -m unittest tests.unit.test_acp_gateway_lifecycle -v
 ```
 
-- [ ] **Step 3: Implement lifecycle**
+- [x] **Step 3: Implement lifecycle**
 
 Keep initial capabilities conservative:
 
@@ -297,7 +297,7 @@ def capabilities(self) -> set[AgentCapability]:
 
 Return static model list from provider config until Cursor model enumeration is verified.
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 ```bash
 cd backend
@@ -305,7 +305,7 @@ uv run python -m unittest tests.unit.test_acp_gateway_lifecycle -v
 uv run python -m py_compile infr/client/acp/acp_gateway.py
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/infr/client/acp/acp_gateway.py backend/tests/unit/test_acp_gateway_lifecycle.py doc/acp-gateway-implementation-plan.md
