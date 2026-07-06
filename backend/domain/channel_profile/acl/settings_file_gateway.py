@@ -24,9 +24,18 @@ class SettingsFileGateway(ABC):
 
     @abstractmethod
     async def update_env_section(self, env_vars: dict[str, str]) -> None:
-        """Merge env_vars into the top-level "env" field of settings.json.
+        """Replace the "env" section of settings.json with env_vars.
 
-        Reads the current settings.json, merges env_vars into the "env" section
-        (preserving other keys already present in env), then writes back the file.
+        Reads the current settings.json, replaces the "env" key with the
+        provided env_vars (clearing stale keys), then writes back.
+        """
+        ...
+
+    @abstractmethod
+    async def sync_default_model(self, model: str) -> None:
+        """Sync DEFAULT_MODEL to .env file and running process environment.
+
+        Called when a channel profile is activated, so that new sessions
+        created via the API use this profile's model by default.
         """
         ...

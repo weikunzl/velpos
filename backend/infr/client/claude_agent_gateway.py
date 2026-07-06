@@ -1040,10 +1040,10 @@ class ClaudeAgentGateway(ClaudeAgentGatewayPort):
                         "cache_creation_input_tokens": getattr(usage, "cache_creation_input_tokens", 0),
                         "cache_read_input_tokens": getattr(usage, "cache_read_input_tokens", 0),
                     }
-                it = usage.get("input_tokens", 0)
-                cc = usage.get("cache_creation_input_tokens", 0)
-                cr = usage.get("cache_read_input_tokens", 0)
-                per_turn = it + cc + cr
+                it = usage.get("input_tokens") or 0
+                cc = usage.get("cache_creation_input_tokens") or 0
+                cr = usage.get("cache_read_input_tokens") or 0
+                per_turn = (it or 0) + (cc or 0) + (cr or 0)
                 if per_turn > 0:
                     result["context_input_tokens"] = per_turn
             return result
@@ -1090,10 +1090,10 @@ class ClaudeAgentGateway(ClaudeAgentGatewayPort):
                 }
             # Context window consumption = input + cache_creation + cache_read
             # (aligned with claude-hud's getTotalTokens logic — output is NOT context)
-            input_tokens = usage.get("input_tokens", 0)
-            cache_creation = usage.get("cache_creation_input_tokens", 0)
-            cache_read = usage.get("cache_read_input_tokens", 0)
-            context_tokens = input_tokens + cache_creation + cache_read
+            input_tokens = usage.get("input_tokens") or 0
+            cache_creation = usage.get("cache_creation_input_tokens") or 0
+            cache_read = usage.get("cache_read_input_tokens") or 0
+            context_tokens = (input_tokens or 0) + (cache_creation or 0) + (cache_read or 0)
             output_tokens = usage.get("output_tokens", 0)
             return {
                 "message_type": "result",

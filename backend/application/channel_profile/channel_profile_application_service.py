@@ -66,6 +66,7 @@ class ChannelProfileApplicationService:
             await self._settings_file_gateway.update_env_section(
                 self._profile_to_env_vars(profile)
             )
+            await self._sync_default_model(profile)
 
         return profile
 
@@ -100,8 +101,14 @@ class ChannelProfileApplicationService:
         await self._settings_file_gateway.update_env_section(
             self._profile_to_env_vars(profile)
         )
+        await self._sync_default_model(profile)
 
         return profile
+
+    async def _sync_default_model(self, profile: ChannelProfile) -> None:
+        model = profile.model_config.get("ANTHROPIC_MODEL", "")
+        if model:
+            await self._settings_file_gateway.sync_default_model(model)
 
     @staticmethod
     def _profile_to_env_vars(profile: ChannelProfile) -> dict[str, str]:

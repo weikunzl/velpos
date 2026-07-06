@@ -65,23 +65,61 @@ class SettingsFileService:
             raise
 
     async def update_env_section(self, env_vars: dict[str, str]) -> None:
-        """Merge-update the 'env' section in settings.json.
+        """Replace the 'env' section in settings.json with the given vars.
 
-        Reads the current settings, updates (not replaces) the 'env'
-        key with the provided env_vars, and writes the result back.
-        Existing keys not present in env_vars are preserved.
+        Reads current settings, replaces the entire 'env' key with
+        the provided env_vars (clearing any stale keys from previous
+        profile activations), and writes the result back.
         """
         async with self._lock:
             settings = await self.read_settings()
-            existing_env: dict = settings.get("env", {})
-            existing_env.update(env_vars)
-            settings["env"] = existing_env
+            settings["env"] = dict(env_vars)
             await self.write_settings(settings)
 
     def _read_sync(self) -> dict:
         """Synchronous file read, intended to be called via asyncio.to_thread."""
         text = self._settings_path.read_text(encoding="utf-8")
         return json.loads(text)
+
+    async def sync_default_model(self, model: str) -> None:
+        """Sync DEFAULT_MODEL to both .env file and the running process environment.
+
+        Called when a channel profile is activated, so new sessions are created
+        with the correct default model without needing a velpos restart.
+        """
+        # Update running process env immediately
+        os.environ["DEFAULT_MODEL"] = model
+
+        # Persist to .env file for future restarts
+        # __file__ = backend/infr/client/settings_file_service.py
+        # 3x .parent = backend/
+        env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+        try:
+            content = env_path.read_text(encoding="utf-8") if env_path.exists() else ""
+        except OSError:
+            logger.warning("Cannot read .env file at %s", env_path)
+            return
+
+        lines = content.splitlines(keepends=True)
+        new_lines: list[str] = []
+        found = False
+        for line in lines:
+            if line.strip().startswith("DEFAULT_MODEL="):
+                new_lines.append(f"DEFAULT_MODEL={model}\n")
+                found = True
+            else:
+                new_lines.append(line)
+
+        if not found:
+            # Append if not present
+            if new_lines and not new_lines[-1].endswith("\n"):
+                new_lines.append("\n")
+            new_lines.append(f"DEFAULT_MODEL={model}\n")
+
+        try:
+            env_path.write_text("".join(new_lines), encoding="utf-8")
+        except OSError:
+            logger.warning("Cannot write .env file at %s", env_path)
 
     def _write_sync(self, data: dict) -> None:
         """Synchronous atomic file write, intended to be called via asyncio.to_thread."""

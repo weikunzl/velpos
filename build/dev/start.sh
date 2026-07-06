@@ -395,6 +395,33 @@ do_status() {
     echo ""
 }
 
+do_start_daemon() {
+    check_prerequisites
+    ensure_dirs
+    echo ""
+    echo " __     __    _                  "
+    echo " \\ \\   / /___| |_ __   ___  ___ "
+    echo "  \\ \\ / // _ \\ | '_ \\ / _ \\/ __|"
+    echo "   \\ V /|  __/ | |_) | (_) \\__ \\"
+    echo "    \\_/  \\___|_| .__/ \\___/|___/"
+    echo "               |_|              "
+    echo ""
+    echo "  [ DEV MODE - DAEMON ]"
+    echo ""
+
+    start_mysql
+    start_backend
+    start_frontend
+
+    echo ""
+    echo "All services started!"
+    echo "  Frontend:  http://localhost:$FRONTEND_PORT"
+    echo "  Backend:   http://localhost:$BACKEND_PORT"
+    echo "  API Docs:  http://localhost:$BACKEND_PORT/docs"
+    echo "  MySQL:     localhost:${MYSQL_HOST_PORT:-3307}"
+    echo ""
+}
+
 do_logs() {
     if [ ! -f "$BACKEND_LOG" ]; then
         error "No backend log found. Is the server running?"
@@ -405,11 +432,12 @@ do_logs() {
 
 # --- Entry ---
 case "${1:-}" in
-    start)   do_start   ;;
-    stop)    do_stop    ;;
-    restart) do_restart ;;
-    status)  do_status  ;;
-    logs)    do_logs    ;;
+    start)        do_start        ;;
+    start-daemon) do_start_daemon ;;
+    stop)         do_stop         ;;
+    restart)      do_restart      ;;
+    status)       do_status       ;;
+    logs)         do_logs         ;;
     *)
         echo "Usage: $0 {start|stop|restart|status|logs}"
         echo ""
