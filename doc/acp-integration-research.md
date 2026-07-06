@@ -370,6 +370,15 @@ cd velpos && build/dev/start.sh start
 | 进程清理 | disconnect session | 子进程退出，无 zombie |
 | MCP（回归） | 配置 `.cursor/mcp.json` 后实测 | 记录当前 Cursor ACP MCP 是否可用 |
 
+当前实现提供一个默认跳过的 opt-in 冒烟测试：
+
+```bash
+cd backend
+VELPOS_RUN_CURSOR_ACP_TEST=1 uv run python -m unittest tests.integration.test_cursor_acp_smoke -v
+```
+
+默认单元测试不会启动真实 `agent acp`；只有设置 `VELPOS_RUN_CURSOR_ACP_TEST=1` 且本机 `agent` 已认证时才执行。
+
 ### 10.4 与 cursor-gateway 的隔离测试
 
 - 确认 Velpos **不**依赖 `cursor-gateway` 的 8001 端口

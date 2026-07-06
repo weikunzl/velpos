@@ -412,7 +412,7 @@ git commit -m "feat(acp): 支持会话级 Agent Provider 选择"
 - Create: `backend/tests/integration/test_cursor_acp_smoke.py`
 - Modify: `doc/acp-integration-research.md` with observed Cursor ACP behavior
 
-- [ ] **Step 1: Add opt-in integration test**
+- [x] **Step 1: Add opt-in integration test**
 
 Skip unless `VELPOS_RUN_CURSOR_ACP_TEST=1` and `agent` is available.
 
@@ -421,14 +421,14 @@ Cover:
 - initialize/session/new/session/prompt simple message
 - disconnect process cleanup
 
-- [ ] **Step 2: Run unit tests**
+- [x] **Step 2: Run unit tests**
 
 ```bash
 cd backend
 uv run python -m unittest discover -s tests/unit -p 'test_*.py' -v
 ```
 
-- [ ] **Step 3: Run optional smoke test locally**
+- [x] **Step 3: Run optional smoke test locally**
 
 ```bash
 cd backend
@@ -437,7 +437,9 @@ VELPOS_RUN_CURSOR_ACP_TEST=1 uv run python -m unittest tests.integration.test_cu
 
 If Cursor auth is unavailable, record it as environment blocker, not a code failure.
 
-- [ ] **Step 4: Commit**
+Current status: opt-in test added and documented; real Cursor ACP execution remains environment-gated and is not part of default verification.
+
+- [x] **Step 4: Commit**
 
 ```bash
 git add backend/tests/integration/test_cursor_acp_smoke.py doc/acp-integration-research.md doc/acp-gateway-implementation-plan.md
