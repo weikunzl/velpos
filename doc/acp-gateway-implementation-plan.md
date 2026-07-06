@@ -177,7 +177,7 @@ git commit -m "feat(acp): 增加 ACP Provider 配置加载"
 - Create: `backend/infr/client/acp/transport.py`
 - Create: `backend/tests/unit/test_acp_transport.py`
 
-- [ ] **Step 1: Write failing transport tests**
+- [x] **Step 1: Write failing transport tests**
 
 Use a fake subprocess or in-memory stream pair to cover:
 - command/args/env passed to subprocess creation
@@ -185,14 +185,14 @@ Use a fake subprocess or in-memory stream pair to cover:
 - process cleanup terminates a still-running process
 - stderr lines are captured for diagnostics without leaking secrets
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 cd backend
 uv run python -m unittest tests.unit.test_acp_transport -v
 ```
 
-- [ ] **Step 3: Implement `StdioTransport`**
+- [x] **Step 3: Implement `StdioTransport`**
 
 Keep the public surface small:
 
@@ -204,7 +204,7 @@ class AcpTransport(Protocol):
     async def close(self) -> None: ...
 ```
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 ```bash
 cd backend
@@ -212,7 +212,7 @@ uv run python -m unittest tests.unit.test_acp_transport -v
 uv run python -m py_compile infr/client/acp/transport.py
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/infr/client/acp/transport.py backend/tests/unit/test_acp_transport.py doc/acp-gateway-implementation-plan.md
