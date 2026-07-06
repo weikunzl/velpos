@@ -16,8 +16,8 @@ from application.terminal.terminal_application_service import TerminalApplicatio
 from application.team_task.team_coordinator_service import TeamCoordinatorService
 from domain.shared.async_utils import safe_create_task
 from domain.shared.business_exception import BusinessException
+from domain.session.acl.agent_gateway import AgentGateway
 from infr.client.connection_manager import ConnectionManager
-from infr.client.claude_agent_gateway import ClaudeAgentGateway as ClaudeAgentGatewayImpl
 from ohs.assembler.session_assembler import SessionAssembler
 from ohs.dependencies import get_session_application_service, get_connection_manager, get_claude_agent_gateway, get_attachment_application_service, get_terminal_application_service, get_create_session_service_factory, get_team_coordinator_service
 
@@ -35,7 +35,7 @@ ConnectionManagerDep = Annotated[
     Depends(get_connection_manager),
 ]
 GatewayDep = Annotated[
-    ClaudeAgentGatewayImpl,
+    AgentGateway,
     Depends(get_claude_agent_gateway),
 ]
 SessionServiceFactoryDep = Annotated[
@@ -64,7 +64,7 @@ class _WsContext:
     session_id: str
     service: SessionApplicationService
     manager: ConnectionManager
-    gateway: ClaudeAgentGatewayImpl
+    gateway: AgentGateway
     session_service_factory: Callable[[], Awaitable[SessionApplicationService]]
     attachment_service: AttachmentApplicationService
     team_service: TeamCoordinatorService

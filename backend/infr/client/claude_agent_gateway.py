@@ -19,6 +19,7 @@ from claude_agent_sdk.types import (
     ToolPermissionContext,
 )
 
+from domain.session.acl.agent_gateway import AgentCapability
 from domain.session.acl.claude_agent_gateway import (
     ClaudeAgentGateway as ClaudeAgentGatewayPort,
 )
@@ -76,6 +77,18 @@ class ClaudeAgentGateway(ClaudeAgentGatewayPort):
         self._lock = asyncio.Lock()
         # Lock for protecting client lifecycle (connect/disconnect)
         self._client_lock = asyncio.Lock()
+
+    def capabilities(self) -> set[AgentCapability]:
+        """Claude Agent SDK supports the full optional feature set."""
+        return {
+            AgentCapability.COMPACT,
+            AgentCapability.REWIND,
+            AgentCapability.MODELS,
+            AgentCapability.FORK,
+            AgentCapability.LOAD,
+            AgentCapability.CONTEXT_USAGE,
+            AgentCapability.SESSION_FILES,
+        }
 
     def _set_state(self, session_id: str, state: str) -> None:
         self._session_states[session_id] = state
