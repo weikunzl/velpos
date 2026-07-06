@@ -23,6 +23,7 @@ function _ensureState(sessionId) {
       runSteps: [],
       timelineEvents: [],
       queued: false,
+      queuedPrompt: '',
       canceling: false,
       cancelledHint: false,
       queryStartedAt: null,
@@ -71,6 +72,11 @@ const queued = computed(() => {
   return state ? state.queued : false
 })
 
+const queuedPrompt = computed(() => {
+  const state = _stateMap.get(currentSessionId.value)
+  return state ? state.queuedPrompt : ''
+})
+
 const canceling = computed(() => {
   const state = _stateMap.get(currentSessionId.value)
   return state ? state.canceling : false
@@ -108,8 +114,19 @@ function addMessageTo(sessionId, msg) {
   const state = _ensureState(sessionId)
   if (!state) return
   const updateLast = Boolean(msg.update_last)
-  const { update_last: _ignored, ...stored } = msg
+  const updateIndex = msg.update_message_index
+  const { update_last: _ignoredUpdateLast, update_message_index: _ignoredIndex, ...stored } = msg
   if (!stored.timestamp) stored.timestamp = Date.now()
+
+  if (
+    updateIndex != null
+    && updateIndex >= 0
+    && updateIndex < state.messages.length
+    && state.messages[updateIndex].type === stored.type
+  ) {
+    state.messages[updateIndex].content = stored.content
+    return
+  }
 
   if (updateLast && state.messages.length > 0) {
     const last = state.messages[state.messages.length - 1]
@@ -244,6 +261,7 @@ function setStatusFor(sessionId, s) {
   }
   if (s === 'idle') {
     state.queued = false
+    state.queuedPrompt = ''
   }
 }
 
@@ -255,6 +273,13 @@ function setQueuedFor(sessionId, val) {
   const state = _ensureState(sessionId)
   if (!state) return
   state.queued = val
+  if (!val) state.queuedPrompt = ''
+}
+
+function setQueuedPromptFor(sessionId, prompt) {
+  const state = _ensureState(sessionId)
+  if (!state) return
+  state.queuedPrompt = prompt || ''
 }
 
 function setErrorFor(sessionId, err) {
@@ -360,6 +385,7 @@ export function useSession() {
     status,
     error,
     queued,
+    queuedPrompt,
     canceling,
     cancelledHint,
     waitingForSlot,
@@ -394,6 +420,7 @@ export function useSession() {
     setStatusFor,
     getQueryStartedAt,
     setQueuedFor,
+    setQueuedPromptFor,
     setErrorFor,
     setCancelingFor,
     getCancelingFor,

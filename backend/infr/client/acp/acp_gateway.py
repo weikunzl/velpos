@@ -5,9 +5,13 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 import inspect
-from typing import Any, AsyncIterator, Callable
+import logging
+import os
+import time
+from typing import Any, AsyncIterator, Awaitable, Callable
 
 from domain.session.acl.agent_gateway import AgentCapability, AgentGateway, NormalizedMessage
+from domain.shared.async_utils import safe_create_task
 from infr.client.acp.client_handlers import AcpClientHandlers
 from infr.client.acp.message_mapper import map_acp_update
 from infr.client.acp.provider import AgentProviderConfig
@@ -27,6 +31,9 @@ _CLIENT_REQUEST_METHODS = {
     "session/request_permission",
     "cursor/ask_question",
 }
+
+
+logger = logging.getLogger(__name__)
 
 
 class AcpPromptCancelled(Exception):
@@ -69,12 +76,16 @@ class AcpGateway(AgentGateway):
         self._pending_request_context: dict[str, dict[str, Any]] = {}
         self._cancel_events: dict[str, asyncio.Event] = {}
         self._broadcast_fn: Callable[[str, dict[str, Any]], Any] | None = None
+        self._is_im_bound_fn: Callable[[str], Awaitable[bool]] | None = None
+        self._sdk_session_ids: dict[str, str] = {}
+        self._idle_timers: dict[str, asyncio.TimerHandle] = {}
+        self._last_activity: dict[str, float] = {}
+        self._idle_timeout = float(os.getenv("ACP_IDLE_TIMEOUT", os.getenv("CLAUDE_IDLE_TIMEOUT", "300")))
         self._lock = asyncio.Lock()
         self._request_id = 0
 
     def capabilities(self) -> set[AgentCapability]:
-        """Initial ACP provider capabilities are conservative until verified."""
-        return set()
+        return {AgentCapability.LOAD, AgentCapability.MODELS}
 
     async def connect(
         self,
@@ -90,13 +101,17 @@ class AcpGateway(AgentGateway):
         **_ignored_kwargs: Any,
     ) -> AsyncIterator[NormalizedMessage]:
         """Open an ACP connection, create a session, and send the first prompt."""
-        connection = await self._open_acp_connection(
+        connection, resume_meta = await self._open_acp_connection(
             session_id=session_id,
             model=model,
             cwd=cwd,
             sdk_session_id=sdk_session_id,
             mcp_servers=mcp_servers,
         )
+        if resume_meta is not None:
+            yield resume_meta
+        yield {"message_type": "_meta", "sdk_session_id": connection.acp_session_id}
+        self._touch(session_id)
         async for message in self._prompt(connection, prompt):
             yield message
         self._states[session_id] = "connected"
@@ -117,6 +132,7 @@ class AcpGateway(AgentGateway):
         if connection is None:
             raise RuntimeError(f"No active ACP connection for session {session_id}")
 
+        self._touch(session_id)
         async for message in self._prompt(connection, prompt):
             yield message
         self._states[session_id] = "connected"
@@ -140,6 +156,9 @@ class AcpGateway(AgentGateway):
 
     async def disconnect(self, session_id: str) -> None:
         """Close the ACP transport and clear in-memory state."""
+        timer = self._idle_timers.pop(session_id, None)
+        if timer is not None:
+            timer.cancel()
         connection = self._connections.pop(session_id, None)
         if connection is not None:
             await connection.transport.close()
@@ -151,11 +170,60 @@ class AcpGateway(AgentGateway):
     async def cleanup_session(self, session_id: str) -> None:
         await self.disconnect(session_id)
         self._states.pop(session_id, None)
+        self._sdk_session_ids.pop(session_id, None)
+        self._last_activity.pop(session_id, None)
         await self._cancel_pending_response(session_id)
 
     def set_broadcast_fn(self, fn: Callable[[str, dict[str, Any]], Any]) -> None:
         """Set callback used to broadcast permission/choice events to Velpos WS."""
         self._broadcast_fn = fn
+
+    def set_is_im_bound_fn(self, fn: Callable[[str], Awaitable[bool]]) -> None:
+        self._is_im_bound_fn = fn
+
+    def get_cached_sdk_session_id(self, session_id: str) -> str | None:
+        return self._sdk_session_ids.get(session_id)
+
+    def schedule_idle_disconnect(self, session_id: str, delay: float | None = None) -> None:
+        if session_id not in self._connections:
+            return
+        old = self._idle_timers.pop(session_id, None)
+        if old is not None:
+            old.cancel()
+        delay = delay if delay is not None else self._idle_timeout
+        loop = asyncio.get_running_loop()
+        self._idle_timers[session_id] = loop.call_later(
+            delay,
+            lambda sid=session_id: safe_create_task(self._idle_disconnect(sid), name=f"acp_idle_disconnect_{sid}"),
+        )
+
+    def _touch(self, session_id: str) -> None:
+        self._last_activity[session_id] = time.monotonic()
+        timer = self._idle_timers.pop(session_id, None)
+        if timer is not None:
+            timer.cancel()
+
+    async def _idle_disconnect(self, session_id: str) -> None:
+        self._idle_timers.pop(session_id, None)
+        if session_id not in self._connections:
+            return
+        if session_id in self._active_sessions:
+            self.schedule_idle_disconnect(session_id)
+            return
+        async with self._lock:
+            has_pending = session_id in self._pending_user_responses
+        if has_pending:
+            self.schedule_idle_disconnect(session_id)
+            return
+        if self._is_im_bound_fn:
+            try:
+                if await self._is_im_bound_fn(session_id):
+                    self.schedule_idle_disconnect(session_id)
+                    return
+            except Exception:
+                logger.warning("ACP idle disconnect IM check failed: session=%s", session_id, exc_info=True)
+        logger.info("ACP idle disconnect: session=%s", session_id)
+        await self.disconnect(session_id)
 
     async def set_model(self, session_id: str, model: str) -> None:
         connection = self._connections.get(session_id)
@@ -219,10 +287,11 @@ class AcpGateway(AgentGateway):
         cwd: str,
         sdk_session_id: str | None,
         mcp_servers: dict | None,
-    ) -> _AcpConnection:
+    ) -> tuple[_AcpConnection, NormalizedMessage | None]:
         await self.disconnect(session_id)
         transport = self._transport_factory(self.provider)
         await transport.start()
+        resume_meta: NormalizedMessage | None = None
 
         try:
             await self._send_request(
@@ -240,22 +309,18 @@ class AcpGateway(AgentGateway):
                     "authenticate",
                     {"methodId": self.provider.auth_method},
                 )
-            result = await self._send_request(
-                transport,
-                "session/new",
-                {
-                    "cwd": cwd,
-                    "model": model or self.provider.default_model,
-                    "sessionId": sdk_session_id or "",
-                    "mcpServers": _mcp_servers_payload(mcp_servers),
-                },
+            acp_session_id, resume_meta = await self._create_or_load_acp_session(
+                transport=transport,
+                cwd=cwd,
+                model=model,
+                sdk_session_id=self._resolve_resume_target(session_id, sdk_session_id),
+                mcp_servers=mcp_servers,
             )
         except Exception:
             await transport.close()
             self._states[session_id] = "idle"
             raise
 
-        acp_session_id = str(result.get("sessionId") or sdk_session_id or session_id)
         connection = _AcpConnection(
             transport=transport,
             session_id=session_id,
@@ -264,8 +329,60 @@ class AcpGateway(AgentGateway):
             cwd=cwd or "",
         )
         self._connections[session_id] = connection
+        self._sdk_session_ids[session_id] = acp_session_id
         self._states[session_id] = "connected"
-        return connection
+        return connection, resume_meta
+
+    def _resolve_resume_target(self, session_id: str, sdk_session_id: str | None) -> str:
+        if sdk_session_id is None:
+            return self._sdk_session_ids.get(session_id, "")
+        return sdk_session_id
+
+    async def _create_or_load_acp_session(
+        self,
+        transport: AcpTransport,
+        cwd: str,
+        model: str,
+        sdk_session_id: str,
+        mcp_servers: dict | None,
+    ) -> tuple[str, NormalizedMessage | None]:
+        mcp_payload = _mcp_servers_payload(mcp_servers)
+        resume_meta: NormalizedMessage | None = None
+
+        if sdk_session_id:
+            try:
+                await self._send_request(
+                    transport,
+                    "session/load",
+                    {
+                        "sessionId": sdk_session_id,
+                        "cwd": cwd,
+                        "mcpServers": mcp_payload,
+                    },
+                )
+                return sdk_session_id, None
+            except Exception:
+                logger.warning(
+                    "ACP session/load failed for %s, falling back to session/new",
+                    sdk_session_id,
+                    exc_info=True,
+                )
+                resume_meta = {"message_type": "_meta", "resume_failed": True}
+
+        result = await self._send_request(
+            transport,
+            "session/new",
+            {
+                "cwd": cwd,
+                "model": model or self.provider.default_model,
+                "sessionId": "",
+                "mcpServers": mcp_payload,
+            },
+        )
+        acp_session_id = str(result.get("sessionId") or "")
+        if not acp_session_id:
+            raise RuntimeError("ACP session/new did not return sessionId")
+        return acp_session_id, resume_meta
 
     async def _prompt(
         self,

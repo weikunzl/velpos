@@ -7,6 +7,7 @@ import { useSession, listModels, createSessionBranch, listSessionBranches, compa
 import { useProject, getGitBranches, checkoutGitBranch } from '@entities/project'
 import { MessageInput, useSendMessage } from '@features/send-message'
 import { useCancelQuery, QueryRuntimeBar, useQueryElapsed } from '@features/cancel-query'
+import { RuntimeActionDock, findPendingInteractive, resolveQueuedPrompt, shouldShowQueuedBlock, queuedBlockMode, shouldHideMessageFromList, buildInteractiveBlock } from '@features/runtime-dock'
 import { MessageList, ThinkingIndicator } from '@features/message-display'
 import { ClearContextButton, useClearContext } from '@features/clear-context'
 import { CommandPaletteButton, CommandPalettePopover, useCommandPalette } from '@features/command-palette'
@@ -27,7 +28,7 @@ import { useViewport } from '@shared/lib/useViewport'
 import { useChatPanelTools } from '@shared/lib/useChatPanelTools'
 
 const {
-  session, messages, status, queued, canceling, cancelledHint, waitingForSlot, recovery, currentSessionId,
+  session, messages, status, queued, queuedPrompt, canceling, cancelledHint, waitingForSlot, recovery, currentSessionId,
   queryHistory, queryStartedAt, setCurrentSessionId, updateSession, setError, setCanceling, addSession,
   restoredPrompt, setRestoredPrompt,
 } = useSession()
@@ -42,14 +43,33 @@ const isRunning = computed(() => status.value === 'running')
 const recoveryPending = computed(() => recovery.value?.pending_request || null)
 const recoveryQueued = computed(() => recovery.value?.queued_command || null)
 const isCancelRequested = computed(() => Boolean(recovery.value?.cancel_requested))
-const showRecoveryHint = computed(() => Boolean(recoveryPending.value || isCancelRequested.value || (recoveryQueued.value && !isRunning.value)))
-const recoveryHintText = computed(() => {
-  if (isCancelRequested.value) return 'Cancellation is being restored'
-  if (recoveryPending.value?.interaction_type === 'permission') return 'Waiting for permission response'
-  if (recoveryPending.value?.interaction_type === 'user_choice') return 'Waiting for your answer'
-  if (recoveryQueued.value) return 'Queued prompt restored'
-  return ''
+const pendingInteractive = computed(() => findPendingInteractive(messages.value))
+const dockInteractiveAnswered = ref(false)
+const dockQueuedText = computed(() => resolveQueuedPrompt({
+  queued: queued.value,
+  isRunning: isRunning.value,
+  recoveryQueued: recoveryQueued.value,
+  queuedPrompt: queuedPrompt.value,
+  messages: messages.value,
+}))
+const dockQueuedMode = computed(() => {
+  if (!shouldShowQueuedBlock({
+    queued: queued.value,
+    isRunning: isRunning.value,
+    recoveryQueued: recoveryQueued.value,
+    queuedPrompt: queuedPrompt.value,
+    messages: messages.value,
+  })) return null
+  return queuedBlockMode({
+    queued: queued.value,
+    isRunning: isRunning.value,
+    recoveryQueued: recoveryQueued.value,
+  })
 })
+const dockInteractiveBlock = computed(() => buildInteractiveBlock(
+  pendingInteractive.value,
+  recoveryPending.value,
+))
 
 const isTeamCoordinator = computed(() => {
   return currentProject.value?.project_type === 'team' && !session.value?.team_task_id
@@ -99,6 +119,15 @@ const allFilteredMessages = computed(() => {
       return msg
     })
     .filter(Boolean)
+    .filter(msg => !shouldHideMessageFromList(msg, {
+      queuedPrompt: queuedPrompt.value,
+      queued: queued.value,
+      isRunning: isRunning.value,
+      recoveryQueued: recoveryQueued.value,
+      pendingInteractive: pendingInteractive.value,
+      dockInteractiveAnswered: dockInteractiveAnswered.value,
+      messages: messages.value,
+    }))
 })
 
 const visibleCount = ref(MESSAGE_PAGE_SIZE)
@@ -502,6 +531,27 @@ function handleCancel() {
     lastCancelAt.value = now
   } else {
     setError('Not connected')
+  }
+}
+
+watch(currentSessionId, () => {
+  dockInteractiveAnswered.value = false
+})
+
+watch(pendingInteractive, () => {
+  dockInteractiveAnswered.value = false
+})
+
+function handleDockInteractiveResponse(data) {
+  const conn = wsConnection?.value
+  if (!conn || conn.getReadyState() !== WebSocket.OPEN) {
+    setError('Not connected')
+    return
+  }
+  if (conn.send({ action: 'user_response', data })) {
+    dockInteractiveAnswered.value = true
+  } else {
+    setError('Connection lost, response not sent')
   }
 }
 
@@ -1050,32 +1100,7 @@ function formatMaxTokens(n) {
       :has-more="hasMoreMessages"
       :agent-provider="provider"
       @load-more="loadMoreMessages"
-    >
-      <template #footer>
-        <div v-if="showRecoveryHint" class="recovery-indicator">
-          <span class="recovery-badge">Recovered</span>
-          <span>{{ recoveryHintText }}</span>
-        </div>
-        <div v-if="canceling" class="queue-indicator cancel-indicator">
-          <span class="queue-dot cancel-dot"></span>
-          Cancelling...
-        </div>
-        <Transition name="cancel-hint-fade">
-          <div v-if="cancelledHint && !canceling" class="queue-indicator cancelled-indicator">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            已取消
-          </div>
-        </Transition>
-        <div v-if="waitingForSlot" class="queue-indicator">
-          <span class="queue-dot"></span>
-          Waiting for an available execution slot
-        </div>
-        <div v-if="queued && isRunning" class="queue-indicator">
-          <span class="queue-dot"></span>
-          Your message is queued — will run after current task
-        </div>
-      </template>
-    </MessageList>
+    />
     <!-- Rewind picker overlay -->
     <Transition name="dropdown-fade">
       <div v-if="showRewindPicker" class="rewind-overlay" @click.self="closeRewindPicker">
@@ -1407,6 +1432,16 @@ function formatMaxTokens(n) {
         />
         </div>
       </div>
+      <RuntimeActionDock
+        :queued-text="dockQueuedText"
+        :queued-mode="dockQueuedMode"
+        :canceling="canceling"
+        :cancelled-hint="cancelledHint"
+        :waiting-for-slot="waitingForSlot"
+        :cancel-requested="isCancelRequested"
+        :interactive-block="dockInteractiveBlock"
+        @interactive-response="handleDockInteractiveResponse"
+      />
       <QueryRuntimeBar
         v-if="queryRuntimeActive && !runtimePanelVisible"
         :visible="true"
@@ -1907,84 +1942,9 @@ function formatMaxTokens(n) {
   pointer-events: none;
 }
 
-.recovery-indicator {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 24px;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.recovery-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: var(--accent-dim);
-  color: var(--accent);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-.queue-indicator {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 24px;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.queue-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: queue-pulse 1.5s ease-in-out infinite;
-}
-
-.cancel-indicator {
-  color: var(--warning, #e89a3c);
-}
-
-.cancel-dot {
-  background: var(--warning, #e89a3c);
-}
-
-.cancelled-indicator {
-  color: var(--yellow);
-}
-
-.cancelled-indicator svg {
-  color: var(--yellow);
-  flex-shrink: 0;
-}
-
 .runtime-cancelled-icon {
   color: var(--yellow);
   flex-shrink: 0;
-}
-
-.cancel-hint-fade-enter-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-.cancel-hint-fade-leave-active {
-  transition: opacity 0.6s ease, transform 0.6s ease;
-}
-.cancel-hint-fade-enter-from {
-  opacity: 0;
-  transform: translateY(4px);
-}
-.cancel-hint-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-4px);
-}
-
-@keyframes queue-pulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 1; }
 }
 
 .input-toolbar {
@@ -2024,6 +1984,11 @@ function formatMaxTokens(n) {
   border-radius: 50%;
   background: var(--accent);
   animation: queue-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes queue-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
 }
 
 .runtime-label {

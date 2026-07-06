@@ -43,7 +43,7 @@ class TestSessionStreamConsumer(unittest.IsolatedAsyncioTestCase):
         first_payload = connection_manager.broadcast.await_args_list[0].args[1]
         second_payload = connection_manager.broadcast.await_args_list[1].args[1]
         self.assertNotIn("update_last", first_payload["data"])
-        self.assertTrue(second_payload["data"]["update_last"])
+        self.assertEqual(0, second_payload["data"]["update_message_index"])
 
 
 if __name__ == "__main__":

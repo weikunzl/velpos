@@ -23,3 +23,19 @@ export function formatInput(input) {
     return String(input)
   }
 }
+
+export function toolInputSummary(input) {
+  if (!input || typeof input !== 'object') return ''
+  const path = input.path || input.file || input.filePath || input.file_path
+  if (path) return String(path)
+  const pattern = input.pattern || input.query || input.regex || input.glob
+  if (pattern) return String(pattern)
+  const command = input.command
+  if (command) {
+    const text = String(command)
+    return text.length > 80 ? `${text.slice(0, 77)}...` : text
+  }
+  const keys = Object.keys(input)
+  if (keys.length === 1) return String(input[keys[0]])
+  return ''
+}

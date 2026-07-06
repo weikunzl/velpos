@@ -126,6 +126,9 @@ class SessionStreamConsumer:
                             session.session_id,
                             {"event": "status_change", "data": SessionPresenter.session_to_dict(session)},
                         )
+                    sdk_sid = msg_dict.get("sdk_session_id")
+                    if sdk_sid:
+                        await self._accept_or_reject_sdk_session_id(session, sdk_sid, "query", run_id)
                     continue
 
                 message = MessageConversionService.convert_stream_message(msg_dict)
@@ -137,7 +140,7 @@ class SessionStreamConsumer:
                     )
                     continue
 
-                stored_message, merged = session.merge_or_add_message(message)
+                stored_message, merged, merged_index = session.merge_or_add_message(message)
                 if not merged:
                     message_count += 1
 
@@ -159,7 +162,10 @@ class SessionStreamConsumer:
                     "content": stored_message.content,
                 }
                 if merged:
-                    broadcast_data["update_last"] = True
+                    if merged_index is not None:
+                        broadcast_data["update_message_index"] = merged_index
+                    else:
+                        broadcast_data["update_last"] = True
                 await self._connection_manager.broadcast(
                     session.session_id,
                     {"event": "message", "data": broadcast_data},

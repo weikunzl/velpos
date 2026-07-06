@@ -1,8 +1,8 @@
 <script setup>
-import { ref } from 'vue'
-import { formatInput } from '../lib/formatters'
+import { computed, ref } from 'vue'
+import { formatInput, toolInputSummary } from '../lib/formatters'
 
-defineProps({
+const props = defineProps({
   block: {
     type: Object,
     required: true,
@@ -10,6 +10,7 @@ defineProps({
 })
 
 const expanded = ref(false)
+const inputSummary = computed(() => toolInputSummary(props.block.input))
 </script>
 
 <template>
@@ -21,6 +22,7 @@ const expanded = ref(false)
         </svg>
       </span>
       <span class="tool-name">{{ block.name }}</span>
+      <span v-if="inputSummary" class="tool-detail">{{ inputSummary }}</span>
       <span class="expand-hint">
         <svg :class="{ rotated: expanded }" width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
           <path d="M4.646 5.646a.5.5 0 0 1 .708 0L8 8.293l2.646-2.647a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3a.5.5 0 0 1 0-.708z"/>
@@ -76,6 +78,16 @@ const expanded = ref(false)
   color: var(--text-secondary);
   font-family: var(--font-mono);
   font-size: 12px;
+}
+
+.tool-detail {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .expand-hint {

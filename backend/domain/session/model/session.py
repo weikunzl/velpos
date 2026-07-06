@@ -336,18 +336,98 @@ class Session:
             if isinstance(block, dict) and block.get("type") == "text"
         )
 
-    def merge_or_add_message(self, message: Message) -> tuple[Message, bool]:
-        """Append a message or merge text into the last assistant message.
+    def _find_tool_use_message_index(self, tool_use_id: str) -> int | None:
+        if not tool_use_id:
+            return None
+        for index in range(len(self._messages) - 1, -1, -1):
+            message = self._messages[index]
+            if message.message_type != MessageType.ASSISTANT:
+                continue
+            blocks = message.content.get("blocks", [])
+            if not isinstance(blocks, list):
+                continue
+            for block in blocks:
+                if (
+                    isinstance(block, dict)
+                    and block.get("type") == "tool_use"
+                    and block.get("id") == tool_use_id
+                ):
+                    return index
+        return None
+
+    def _patch_tool_use_message(
+        self,
+        tool_use_id: str,
+        patch_block: dict[str, Any],
+    ) -> tuple[Message, int] | None:
+        index = self._find_tool_use_message_index(tool_use_id)
+        if index is None:
+            return None
+
+        message = self._messages[index]
+        blocks = message.content.get("blocks", [])
+        if not isinstance(blocks, list):
+            return None
+
+        patched_blocks: list[dict[str, Any]] = []
+        patched = False
+        for block in blocks:
+            if (
+                isinstance(block, dict)
+                and block.get("type") == "tool_use"
+                and block.get("id") == tool_use_id
+            ):
+                existing_input = block.get("input") if isinstance(block.get("input"), dict) else {}
+                patch_input = patch_block.get("input") if isinstance(patch_block.get("input"), dict) else {}
+                merged_name = str(patch_block.get("name") or block.get("name") or "")
+                patched_blocks.append(
+                    {
+                        **block,
+                        "name": merged_name,
+                        "input": {**existing_input, **patch_input},
+                    }
+                )
+                patched = True
+            else:
+                patched_blocks.append(block)
+
+        if not patched:
+            return None
+
+        merged = Message.create(
+            message_type=MessageType.ASSISTANT,
+            content={"blocks": patched_blocks},
+        )
+        self._messages[index] = merged
+        return merged, index
+
+    def merge_or_add_message(self, message: Message) -> tuple[Message, bool, int | None]:
+        """Append a message or merge into an existing assistant message.
 
         Consecutive assistant messages that contain only text blocks are merged
         so streaming backends (e.g. ACP ``agent_message_chunk``) persist as one
-        assistant bubble.
+        assistant bubble. Tool-call updates (ACP ``tool_call_update``) patch the
+        matching ``tool_use`` block in place.
 
         Returns:
-            The stored message and whether an in-place merge happened.
+            The stored message, whether an in-place merge happened, and the
+            message index when merged in place.
         """
         if message is None:
             raise ValueError("message must not be None")
+
+        if message.message_type == MessageType.ASSISTANT:
+            blocks = message.content.get("blocks", [])
+            if (
+                isinstance(blocks, list)
+                and len(blocks) == 1
+                and isinstance(blocks[0], dict)
+                and blocks[0].get("type") == "tool_use"
+            ):
+                tool_use_id = str(blocks[0].get("id") or "")
+                patch_result = self._patch_tool_use_message(tool_use_id, blocks[0])
+                if patch_result is not None:
+                    return patch_result[0], True, patch_result[1]
 
         if (
             message.message_type == MessageType.ASSISTANT
@@ -365,10 +445,10 @@ class Session:
                 content={"blocks": [{"type": "text", "text": merged_text}]},
             )
             self._messages[-1] = merged
-            return merged, True
+            return merged, True, len(self._messages) - 1
 
         self.add_message(message)
-        return message, False
+        return message, False, None
 
     @staticmethod
     def _validate_token_counts(input_tokens: int, output_tokens: int) -> None:

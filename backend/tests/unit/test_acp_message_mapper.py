@@ -89,7 +89,7 @@ class TestAcpMessageMapper(unittest.TestCase):
 
         self.assertIsNone(message)
 
-    def test_tool_call_update_is_ignored(self) -> None:
+    def test_tool_call_update_without_input_is_ignored(self) -> None:
         message = map_acp_update(
             {
                 "update": {
@@ -101,6 +101,40 @@ class TestAcpMessageMapper(unittest.TestCase):
         )
 
         self.assertIsNone(message)
+
+    def test_tool_call_update_maps_raw_input_patch(self) -> None:
+        message = map_acp_update(
+            {
+                "update": {
+                    "sessionUpdate": "tool_call_update",
+                    "toolCallId": "tool-1",
+                    "title": "Read File",
+                    "rawInput": {"path": "README.md"},
+                }
+            }
+        )
+
+        self.assertEqual("assistant", message["message_type"])
+        block = message["content"]["blocks"][0]
+        self.assertEqual("tool-1", block["id"])
+        self.assertEqual("Read File", block["name"])
+        self.assertEqual({"path": "README.md"}, block["input"])
+
+    def test_tool_call_uses_locations_when_raw_input_missing(self) -> None:
+        message = map_acp_update(
+            {
+                "update": {
+                    "sessionUpdate": "tool_call",
+                    "toolCallId": "tool-1",
+                    "title": "Read File",
+                    "kind": "read",
+                    "locations": [{"path": "doc/acp-handoff.md", "line": 1}],
+                }
+            }
+        )
+
+        block = message["content"]["blocks"][0]
+        self.assertEqual({"path": "doc/acp-handoff.md", "line": 1}, block["input"])
 
     def test_maps_acp_tool_call_with_kind_field(self) -> None:
         """Tool-call payloads carry ``kind`` (execute/read/...) — not the update type."""

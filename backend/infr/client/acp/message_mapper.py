@@ -18,7 +18,6 @@ SYSTEM_UPDATE_TYPES = {"terminal", "progress", "task", "status", "plan", "todos"
 SKIP_UPDATE_TYPES = {
     "user_message_chunk",
     "agent_thought_chunk",
-    "tool_call_update",
     "plan_update",
     "plan_removed",
     "available_commands_update",
@@ -62,6 +61,8 @@ def map_acp_update(payload: Any) -> NormalizedMessage | None:
         return _text_message(update)
     if update_type in TOOL_CALL_TYPES:
         return _tool_call_message(update)
+    if update_type == "tool_call_update":
+        return _tool_call_update_message(update)
     if update_type in SYSTEM_UPDATE_TYPES:
         return _system_message(update, update_type)
 
@@ -94,16 +95,78 @@ def _text_message(update: dict[str, Any]) -> NormalizedMessage:
     }
 
 
-def _tool_call_message(update: dict[str, Any]) -> NormalizedMessage:
-    tool_input = (
+def _tool_call_id(update: dict[str, Any]) -> str:
+    return str(
+        update.get("id")
+        or update.get("tool_call_id")
+        or update.get("toolCallId")
+        or ""
+    )
+
+
+def _tool_call_name(update: dict[str, Any]) -> str:
+    return str(
+        update.get("name")
+        or update.get("tool_name")
+        or update.get("title")
+        or update.get("kind")
+        or ""
+    )
+
+
+def _extract_tool_input(update: dict[str, Any]) -> dict[str, Any]:
+    raw = (
         update.get("rawInput")
         or update.get("raw_input")
         or update.get("input")
         or update.get("arguments")
-        or {}
+        or update.get("toolInput")
+        or update.get("tool_input")
     )
-    if not isinstance(tool_input, dict):
-        tool_input = {"value": tool_input}
+    if isinstance(raw, dict) and raw:
+        return dict(raw)
+    if raw not in (None, {}, ""):
+        return {"value": raw}
+
+    locations = update.get("locations")
+    if isinstance(locations, list) and locations:
+        first = locations[0]
+        if isinstance(first, dict):
+            result: dict[str, Any] = {}
+            if first.get("path"):
+                result["path"] = first["path"]
+            if first.get("line") is not None:
+                result["line"] = first["line"]
+            if result:
+                return result
+
+    return {}
+
+
+def _tool_call_message(update: dict[str, Any]) -> NormalizedMessage:
+    return {
+        "message_type": "assistant",
+        "content": {
+            "blocks": [
+                {
+                    "type": "tool_use",
+                    "id": _tool_call_id(update),
+                    "name": _tool_call_name(update),
+                    "input": _extract_tool_input(update),
+                }
+            ]
+        },
+    }
+
+
+def _tool_call_update_message(update: dict[str, Any]) -> NormalizedMessage | None:
+    tool_id = _tool_call_id(update)
+    if not tool_id:
+        return None
+
+    tool_input = _extract_tool_input(update)
+    if not tool_input:
+        return None
 
     return {
         "message_type": "assistant",
@@ -111,19 +174,8 @@ def _tool_call_message(update: dict[str, Any]) -> NormalizedMessage:
             "blocks": [
                 {
                     "type": "tool_use",
-                    "id": str(
-                        update.get("id")
-                        or update.get("tool_call_id")
-                        or update.get("toolCallId")
-                        or ""
-                    ),
-                    "name": str(
-                        update.get("name")
-                        or update.get("tool_name")
-                        or update.get("title")
-                        or update.get("kind")
-                        or ""
-                    ),
+                    "id": tool_id,
+                    "name": _tool_call_name(update),
                     "input": tool_input,
                 }
             ]

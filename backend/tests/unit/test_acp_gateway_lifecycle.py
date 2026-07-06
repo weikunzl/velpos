@@ -58,13 +58,16 @@ class TestAcpGatewayLifecycle(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(gateway.is_connected("velpos-1"))
         self.assertEqual("connected", gateway.get_state("velpos-1"))
         self.assertEqual("auto", gateway.get_connected_model("velpos-1"))
-        self.assertEqual([{"type": "text", "text": "hello"}], messages[0]["content"]["blocks"])
+        self.assertEqual("_meta", messages[0]["message_type"])
+        self.assertEqual("acp-session-1", messages[0]["sdk_session_id"])
+        self.assertEqual([{"type": "text", "text": "hello"}], messages[1]["content"]["blocks"])
         self.assertEqual("result", messages[-1]["message_type"])
         self.assertEqual(["initialize", "session/new", "session/prompt"], [item["method"] for item in transport.sent])
         self.assertEqual("/tmp/project", transport.sent[1]["params"]["cwd"])
         self.assertEqual([], transport.sent[1]["params"]["mcpServers"])
         self.assertEqual("acp-session-1", transport.sent[2]["params"]["sessionId"])
         self.assertEqual([{"type": "text", "text": "hi"}], transport.sent[2]["params"]["prompt"])
+        self.assertEqual("acp-session-1", gateway.get_cached_sdk_session_id("velpos-1"))
 
     async def test_connect_accepts_legacy_claude_kwargs_without_forwarding_them(self) -> None:
         transport = FakeTransport(
@@ -131,6 +134,78 @@ class TestAcpGatewayLifecycle(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([{"type": "text", "text": "again"}], transport.sent[-1]["params"]["prompt"])
         self.assertEqual("again", messages[0]["content"]["blocks"][0]["text"])
         self.assertEqual("result", messages[-1]["message_type"])
+
+    async def test_connect_uses_session_load_when_sdk_session_id_provided(self) -> None:
+        transport = FakeTransport(
+            [
+                {"jsonrpc": "2.0", "id": 1, "result": {}},
+                {"jsonrpc": "2.0", "id": 2, "result": {}},
+                {"jsonrpc": "2.0", "method": "session/update", "params": {"update": {"type": "agent_message_chunk", "text": "resumed"}}},
+                {"jsonrpc": "2.0", "id": 3, "result": {}},
+            ]
+        )
+        gateway = AcpGateway(self._provider(), transport_factory=lambda _provider: transport)
+
+        messages = [
+            message
+            async for message in gateway.connect(
+                "velpos-1",
+                "auto",
+                "hi",
+                cwd="/tmp/project",
+                sdk_session_id="acp-session-existing",
+            )
+        ]
+
+        self.assertEqual(["initialize", "session/load", "session/prompt"], [item["method"] for item in transport.sent])
+        self.assertEqual("acp-session-existing", transport.sent[1]["params"]["sessionId"])
+        self.assertEqual("acp-session-existing", messages[0]["sdk_session_id"])
+        self.assertEqual("resumed", messages[1]["content"]["blocks"][0]["text"])
+
+    async def test_connect_falls_back_to_session_new_when_load_fails(self) -> None:
+        transport = FakeTransport(
+            [
+                {"jsonrpc": "2.0", "id": 1, "result": {}},
+                {"jsonrpc": "2.0", "id": 2, "error": {"message": "session not found"}},
+                {"jsonrpc": "2.0", "id": 3, "result": {"sessionId": "acp-session-fresh"}},
+                {"jsonrpc": "2.0", "id": 4, "result": {}},
+            ]
+        )
+        gateway = AcpGateway(self._provider(), transport_factory=lambda _provider: transport)
+
+        messages = [
+            message
+            async for message in gateway.connect(
+                "velpos-1",
+                "auto",
+                "hi",
+                sdk_session_id="acp-session-missing",
+            )
+        ]
+
+        self.assertEqual(
+            ["initialize", "session/load", "session/new", "session/prompt"],
+            [item["method"] for item in transport.sent],
+        )
+        self.assertTrue(messages[0].get("resume_failed"))
+        self.assertEqual("acp-session-fresh", messages[1]["sdk_session_id"])
+
+    async def test_idle_disconnect_closes_inactive_connection(self) -> None:
+        transport = FakeTransport(
+            [
+                {"jsonrpc": "2.0", "id": 1, "result": {}},
+                {"jsonrpc": "2.0", "id": 2, "result": {"sessionId": "acp-session-1"}},
+                {"jsonrpc": "2.0", "id": 3, "result": {}},
+            ]
+        )
+        gateway = AcpGateway(self._provider(), transport_factory=lambda _provider: transport)
+        _ = [message async for message in gateway.connect("velpos-1", "auto", "hi")]
+
+        await gateway._idle_disconnect("velpos-1")
+
+        self.assertTrue(transport.closed)
+        self.assertFalse(gateway.is_connected("velpos-1"))
+        self.assertEqual("acp-session-1", gateway.get_cached_sdk_session_id("velpos-1"))
 
     async def test_disconnect_closes_transport_and_clears_state(self) -> None:
         transport = FakeTransport(

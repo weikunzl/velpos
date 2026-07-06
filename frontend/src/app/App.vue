@@ -41,6 +41,7 @@ const {
   upsertTimelineEventFor,
   setStatusFor,
   setQueuedFor,
+  setQueuedPromptFor,
   setErrorFor,
   setCancelingFor,
   getCancelingFor,
@@ -249,9 +250,13 @@ provide('wsConnections', _connections) // 提供整个连接池给全局快捷�
 provide('switchSession', switchSession) // 提供session切换函数
 
 function syncRecoveryState(sessionId, sessionData) {
-  const hasQueued = Boolean(sessionData?.recovery?.queued_command)
+  const queuedCommand = sessionData?.recovery?.queued_command
+  const hasQueued = Boolean(queuedCommand)
   const status = sessionData?.status || 'idle'
   setQueuedFor(sessionId, hasQueued && status === 'running')
+  if (queuedCommand?.prompt) {
+    setQueuedPromptFor(sessionId, queuedCommand.prompt)
+  }
 }
 
 async function loadLatestRunSteps(sessionId) {
@@ -347,6 +352,9 @@ function setupUnifiedHandler(connection, sessionId) {
 
       case 'message_queued':
         setQueuedFor(sessionId, true)
+        if (data.prompt) {
+          setQueuedPromptFor(sessionId, data.prompt)
+        }
         break
 
       case 'resource_waiting':
