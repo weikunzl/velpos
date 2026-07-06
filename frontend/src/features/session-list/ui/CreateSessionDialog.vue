@@ -2,6 +2,7 @@
 import { computed, ref, watch, nextTick } from 'vue'
 import { pickProjectDirectory } from '@entities/project'
 import { useEscapeToClose } from '@shared/lib/useDialogManager'
+import { AGENT_PROVIDERS, LAST_AGENT_PROVIDER_KEY } from '@shared/lib/constants'
 
 const props = defineProps({
   visible: {
@@ -15,6 +16,7 @@ const emit = defineEmits(['confirm', 'cancel'])
 useEscapeToClose(() => props.visible, () => emit('cancel'))
 
 const mode = ref('github')
+const agentProvider = ref(localStorage.getItem(LAST_AGENT_PROVIDER_KEY) || 'claude')
 const projectName = ref('')
 const githubUrl = ref('')
 const projectPath = ref('')
@@ -25,6 +27,7 @@ const primaryInput = ref(null)
 
 const isMac = /Mac|iPhone|iPad|iPod/.test(window.navigator.platform || window.navigator.userAgent)
 const PROJECT_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/
+const agentProviderOptions = AGENT_PROVIDERS
 
 function getPathBaseName(path) {
   const trimmed = path.trim().replace(/[\\/]+$/, '')
@@ -66,6 +69,7 @@ watch(() => props.visible, (val) => {
     })
   } else {
     mode.value = 'github'
+    agentProvider.value = localStorage.getItem(LAST_AGENT_PROVIDER_KEY) || 'claude'
     projectName.value = ''
     githubUrl.value = ''
     projectPath.value = ''
@@ -110,12 +114,14 @@ async function handlePickDirectory() {
 function handleConfirm() {
   if (!canConfirm.value) return
   creating.value = true
+  localStorage.setItem(LAST_AGENT_PROVIDER_KEY, agentProvider.value)
 
   if (mode.value === 'local') {
     emit('confirm', {
       mode: 'local',
       name: resolvedProjectName.value,
       dirPath: projectPath.value.trim(),
+      provider: agentProvider.value,
     })
     return
   }
@@ -124,6 +130,7 @@ function handleConfirm() {
     mode: 'github',
     name: projectName.value.trim(),
     githubUrl: githubUrl.value.trim(),
+    provider: agentProvider.value,
   })
 }
 
@@ -235,6 +242,26 @@ function handleCancel() {
           </div>
         </template>
 
+        <div class="form-group">
+          <label class="form-label" for="agent-provider">
+            Agent Provider
+          </label>
+          <select
+            id="agent-provider"
+            v-model="agentProvider"
+            class="form-input form-select"
+          >
+            <option
+              v-for="option in agentProviderOptions"
+              :key="option.id"
+              :value="option.id"
+            >
+              {{ option.label }}
+            </option>
+          </select>
+          <div class="form-hint">Claude Code 为默认路径；Cursor ACP 在服务端运行 `agent acp`。</div>
+        </div>
+
         <div class="dialog-actions">
           <button
             class="btn-ghost"
@@ -345,6 +372,10 @@ function handleCancel() {
 
 .form-input::placeholder {
   color: var(--text-muted);
+}
+
+.form-select {
+  cursor: pointer;
 }
 
 .form-hint {

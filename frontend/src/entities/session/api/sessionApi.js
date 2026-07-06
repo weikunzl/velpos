@@ -1,7 +1,12 @@
 import { get, post, del, patch } from '@shared/api/httpClient'
 
-export function createSession({ name = '', projectId = '', projectDir = '' } = {}) {
-  return post('/sessions', { name, project_id: projectId, project_dir: projectDir })
+export function createSession({ name = '', projectId = '', projectDir = '', provider = 'claude' } = {}) {
+  return post('/sessions', {
+    name,
+    project_id: projectId,
+    project_dir: projectDir,
+    provider,
+  })
 }
 
 export function listSessions() {

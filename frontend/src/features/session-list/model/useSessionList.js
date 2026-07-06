@@ -19,7 +19,7 @@ import {
   ensureProjectsByDirs,
 } from '@entities/project'
 import { listClaudeSessions, deleteClaudeSession } from '../api/claudeSessionApi'
-import { LAST_SESSION_ID_KEY } from '@shared/lib/constants'
+import { LAST_SESSION_ID_KEY, LAST_AGENT_PROVIDER_KEY } from '@shared/lib/constants'
 
 export function useSessionList() {
   const {
@@ -45,6 +45,11 @@ export function useSessionList() {
 
   const loading = ref(false)
   let _loadSeq = 0
+
+  function resolveAgentProvider(explicitProvider) {
+    if (explicitProvider) return explicitProvider
+    return localStorage.getItem(LAST_AGENT_PROVIDER_KEY) || 'claude'
+  }
 
   async function loadSessions() {
     const seq = ++_loadSeq
@@ -129,6 +134,7 @@ export function useSessionList() {
       const session = await createSession({
         projectId: project.id,
         projectDir: project.dir_path || dirPath,
+        provider: resolveAgentProvider(payload.provider),
       })
       addSession({ ...session, source: 'velpos' })
       setCurrentProjectId(project.id)
@@ -143,6 +149,7 @@ export function useSessionList() {
     const session = await createSession({
       projectId: project.id,
       projectDir: project.dir_path || '',
+      provider: resolveAgentProvider(payload.provider),
     })
     addSession({ ...session, source: 'velpos' })
     setCurrentProjectId(project.id)
@@ -188,6 +195,7 @@ export function useSessionList() {
         projectId: session.project_id,
         projectDir: session.project_dir || '',
         name: copyName,
+        provider: session.provider || 'claude',
       })
       addSession({ ...created, source: 'velpos' })
     } else {
@@ -270,6 +278,7 @@ export function useSessionList() {
     const session = await createSession({
       projectId,
       projectDir: project?.dir_path || '',
+      provider: resolveAgentProvider(),
     })
     addSession({ ...session, source: 'velpos' })
     switchSession(session.session_id)

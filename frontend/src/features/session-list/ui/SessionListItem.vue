@@ -83,6 +83,13 @@ const imChannelLabel = computed(() => {
   return labels[ct] || ct
 })
 
+const providerLabel = computed(() => {
+  if (isClaudeCode.value) return ''
+  const provider = props.session.provider || 'claude'
+  if (provider === 'claude') return ''
+  return provider === 'cursor' ? 'Cursor' : provider
+})
+
 function startEditing() {
   editing.value = true
   editName.value = displayName.value
@@ -198,6 +205,9 @@ function requestCopy() {
         </template>
       </div>
       <div class="session-meta">
+        <span v-if="providerLabel" class="provider-badge" :title="'Agent: ' + providerLabel">
+          {{ providerLabel }}
+        </span>
         <span v-if="session.im_binding" class="im-badge" :title="'IM: ' + session.im_binding.channel_type">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -445,6 +455,18 @@ function requestCopy() {
   border-radius: 6px;
   background: var(--blue-dim, rgba(59, 130, 246, 0.1));
   color: var(--blue, #3b82f6);
+  white-space: nowrap;
+}
+
+.provider-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: var(--accent-dim, rgba(99, 102, 241, 0.12));
+  color: var(--accent, #6366f1);
   white-space: nowrap;
 }
 

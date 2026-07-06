@@ -469,6 +469,22 @@ git commit -m "test(acp): 增加 Cursor ACP 冒烟验证"
 
 ---
 
+## Task 9: Frontend Provider Selection
+
+**Files:**
+- Modify: `frontend/src/entities/session/api/sessionApi.js`
+- Modify: `frontend/src/features/session-list/ui/CreateSessionDialog.vue`
+- Modify: `frontend/src/features/session-list/model/useSessionList.js`
+- Modify: `frontend/src/features/session-list/ui/SessionListItem.vue`
+- Modify: `frontend/src/shared/lib/constants.js`
+
+- [x] **Step 1: Pass `provider` in create-session API**
+- [x] **Step 2: Add provider selector to new-project dialog**
+- [x] **Step 3: Reuse last provider for in-project session creation**
+- [x] **Step 4: Show non-default provider badge in session list**
+
+---
+
 ## Self-Review
 
 - Spec coverage: §15 remote personal use and §16 B1-B8 are covered by Tasks 1-8.
