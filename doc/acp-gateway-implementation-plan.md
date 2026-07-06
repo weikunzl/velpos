@@ -320,7 +320,7 @@ git commit -m "feat(acp): 实现 ACP 网关生命周期"
 - Modify: `backend/infr/client/acp/acp_gateway.py`
 - Create: `backend/tests/unit/test_acp_gateway_permission.py`
 
-- [ ] **Step 1: Write permission tests**
+- [x] **Step 1: Write permission tests**
 
 Cover:
 - ACP permission request broadcasts existing `permission_request`
@@ -329,25 +329,25 @@ Cover:
 - timeout denies request with clear message
 - Cursor `cursor/ask_question` maps to `user_choice_request`
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 cd backend
 uv run python -m unittest tests.unit.test_acp_gateway_permission -v
 ```
 
-- [ ] **Step 3: Implement permission broker**
+- [x] **Step 3: Implement permission broker**
 
 Reuse the same pending future pattern as Claude gateway. Extract shared helper only if duplication becomes meaningful; do not refactor unrelated Claude code.
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 ```bash
 cd backend
 uv run python -m unittest tests.unit.test_acp_gateway_permission -v
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/infr/client/acp/acp_gateway.py backend/tests/unit/test_acp_gateway_permission.py doc/acp-gateway-implementation-plan.md

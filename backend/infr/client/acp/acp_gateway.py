@@ -2,7 +2,9 @@ from __future__ import annotations
 
 """AgentGateway implementation for ACP providers."""
 
+import asyncio
 from dataclasses import dataclass
+import inspect
 from typing import Any, AsyncIterator, Callable
 
 from domain.session.acl.agent_gateway import AgentCapability, AgentGateway, NormalizedMessage
@@ -17,6 +19,7 @@ TransportFactory = Callable[[AgentProviderConfig], AcpTransport]
 @dataclass
 class _AcpConnection:
     transport: AcpTransport
+    session_id: str
     acp_session_id: str
     model: str
 
@@ -34,12 +37,18 @@ class AcpGateway(AgentGateway):
         self,
         provider: AgentProviderConfig,
         transport_factory: TransportFactory | None = None,
+        user_response_timeout: float = 3600.0,
     ) -> None:
         self.provider = provider
         self._transport_factory = transport_factory or self._default_transport_factory
+        self._user_response_timeout = user_response_timeout
         self._connections: dict[str, _AcpConnection] = {}
         self._states: dict[str, str] = {}
         self._active_sessions: set[str] = set()
+        self._pending_user_responses: dict[str, asyncio.Future[dict[str, Any]]] = {}
+        self._pending_request_context: dict[str, dict[str, Any]] = {}
+        self._broadcast_fn: Callable[[str, dict[str, Any]], Any] | None = None
+        self._lock = asyncio.Lock()
         self._request_id = 0
 
     def capabilities(self) -> set[AgentCapability]:
@@ -108,10 +117,16 @@ class AcpGateway(AgentGateway):
             await connection.transport.close()
         self._states[session_id] = "idle"
         self._active_sessions.discard(session_id)
+        await self._cancel_pending_response(session_id)
 
     async def cleanup_session(self, session_id: str) -> None:
         await self.disconnect(session_id)
         self._states.pop(session_id, None)
+        await self._cancel_pending_response(session_id)
+
+    def set_broadcast_fn(self, fn: Callable[[str, dict[str, Any]], Any]) -> None:
+        """Set callback used to broadcast permission/choice events to Velpos WS."""
+        self._broadcast_fn = fn
 
     async def set_model(self, session_id: str, model: str) -> None:
         connection = self._connections.get(session_id)
@@ -144,6 +159,25 @@ class AcpGateway(AgentGateway):
 
     def is_active(self, session_id: str) -> bool:
         return session_id in self._active_sessions
+
+    def is_waiting_for_user_input(self, session_id: str) -> bool:
+        future = self._pending_user_responses.get(session_id)
+        return bool(future and not future.done())
+
+    async def resolve_user_response(self, session_id: str, response_data: dict[str, Any]) -> bool:
+        async with self._lock:
+            future = self._pending_user_responses.get(session_id)
+            if future is None or future.done():
+                return False
+            future.set_result(response_data)
+            return True
+
+    async def get_pending_request_context(self, session_id: str) -> dict[str, Any] | None:
+        async with self._lock:
+            future = self._pending_user_responses.get(session_id)
+            if future is None or future.done():
+                return None
+            return self._pending_request_context.get(session_id)
 
     async def _open_acp_connection(
         self,
@@ -186,7 +220,12 @@ class AcpGateway(AgentGateway):
             raise
 
         acp_session_id = str(result.get("sessionId") or sdk_session_id or session_id)
-        connection = _AcpConnection(transport=transport, acp_session_id=acp_session_id, model=model)
+        connection = _AcpConnection(
+            transport=transport,
+            session_id=session_id,
+            acp_session_id=acp_session_id,
+            model=model,
+        )
         self._connections[session_id] = connection
         self._states[session_id] = "connected"
         return connection
@@ -211,6 +250,10 @@ class AcpGateway(AgentGateway):
 
         while True:
             message = await connection.transport.receive_json()
+            method = message.get("method")
+            if method in {"session/request_permission", "cursor/ask_question"}:
+                await self._handle_agent_request(connection, message)
+                continue
             if message.get("method") == "session/update":
                 params = message.get("params") or {}
                 yield map_acp_update(params)
@@ -256,6 +299,125 @@ class AcpGateway(AgentGateway):
         else:
             message = str(error)
         raise RuntimeError(f"ACP request {method} failed: {message}")
+
+    async def _handle_agent_request(
+        self,
+        connection: _AcpConnection,
+        message: dict[str, Any],
+    ) -> None:
+        request_id = message.get("id")
+        method = str(message.get("method") or "")
+        params = message.get("params") or {}
+        if not isinstance(params, dict):
+            params = {}
+
+        if method == "cursor/ask_question":
+            result = await self._ask_user(connection.session_id, request_id, params)
+        else:
+            result = await self._request_permission(connection.session_id, request_id, params)
+
+        await connection.transport.send_json(
+            {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": result,
+            }
+        )
+
+    async def _request_permission(
+        self,
+        session_id: str,
+        request_id: Any,
+        params: dict[str, Any],
+    ) -> dict[str, Any]:
+        tool_name = str(params.get("toolName") or params.get("tool_name") or "")
+        tool_input = params.get("toolInput") or params.get("tool_input") or {}
+        event_data = {
+            "event": "permission_request",
+            "tool_name": tool_name,
+            "tool_input": str(tool_input)[:500],
+        }
+        response = await self._await_user_response(
+            session_id=session_id,
+            context={
+                "request_id": request_id,
+                "tool_name": tool_name,
+                "tool_input": event_data["tool_input"],
+            },
+            event_data=event_data,
+        )
+        if response.get("decision") == "allow":
+            return {"outcome": "allow"}
+        return {
+            "outcome": "deny",
+            "message": str(response.get("message") or "User denied"),
+        }
+
+    async def _ask_user(
+        self,
+        session_id: str,
+        request_id: Any,
+        params: dict[str, Any],
+    ) -> dict[str, Any]:
+        questions = params.get("questions") or []
+        event_data = {
+            "event": "user_choice_request",
+            "tool_name": "cursor/ask_question",
+            "questions": questions,
+        }
+        response = await self._await_user_response(
+            session_id=session_id,
+            context={
+                "request_id": request_id,
+                "tool_name": "cursor/ask_question",
+                "questions": questions,
+            },
+            event_data=event_data,
+        )
+        answers = response.get("answers") or {}
+        return {"answers": answers if isinstance(answers, dict) else {}}
+
+    async def _await_user_response(
+        self,
+        session_id: str,
+        context: dict[str, Any],
+        event_data: dict[str, Any],
+    ) -> dict[str, Any]:
+        if self._broadcast_fn is None:
+            return {"decision": "deny", "message": "No user interface is attached"}
+
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future[dict[str, Any]] = loop.create_future()
+        async with self._lock:
+            self._pending_user_responses[session_id] = future
+            self._pending_request_context[session_id] = context
+
+        self._states[session_id] = "waiting_permission"
+        await self._broadcast(session_id, event_data)
+        try:
+            return await asyncio.wait_for(future, timeout=self._user_response_timeout)
+        except asyncio.TimeoutError:
+            return {"decision": "deny", "message": "User response timeout"}
+        finally:
+            async with self._lock:
+                self._pending_user_responses.pop(session_id, None)
+                self._pending_request_context.pop(session_id, None)
+            if self._states.get(session_id) == "waiting_permission":
+                self._states[session_id] = "streaming"
+
+    async def _broadcast(self, session_id: str, event_data: dict[str, Any]) -> None:
+        if self._broadcast_fn is None:
+            return
+        result = self._broadcast_fn(session_id, event_data)
+        if inspect.isawaitable(result):
+            await result
+
+    async def _cancel_pending_response(self, session_id: str) -> None:
+        async with self._lock:
+            future = self._pending_user_responses.pop(session_id, None)
+            self._pending_request_context.pop(session_id, None)
+        if future is not None and not future.done():
+            future.cancel()
 
     @staticmethod
     def _default_transport_factory(provider: AgentProviderConfig) -> AcpTransport:
