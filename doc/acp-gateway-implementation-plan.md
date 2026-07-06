@@ -57,7 +57,7 @@
 - Create: `backend/tests/unit/test_routing_agent_gateway.py`
 - Modify: `backend/ohs/dependencies.py`
 
-- [ ] **Step 1: Write failing routing tests**
+- [x] **Step 1: Write failing routing tests**
 
 Create tests with two fake `AgentGateway` implementations:
 
@@ -78,7 +78,7 @@ Also cover:
 - sessions without explicit provider use `default_provider`
 - `capabilities()` returns current session backend capabilities when a session is bound
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -89,7 +89,7 @@ uv run python -m unittest tests.unit.test_routing_agent_gateway -v
 
 Expected: import failure for `routing_agent_gateway`.
 
-- [ ] **Step 3: Implement minimal routing gateway**
+- [x] **Step 3: Implement minimal routing gateway**
 
 Implement:
 - `bind_session_provider(session_id, provider)`
@@ -99,7 +99,7 @@ Implement:
 
 Do not implement provider selection UI yet.
 
-- [ ] **Step 4: Run GREEN and compile**
+- [x] **Step 4: Run GREEN and compile**
 
 Run:
 
@@ -109,7 +109,7 @@ uv run python -m unittest tests.unit.test_routing_agent_gateway -v
 uv run python -m py_compile infr/client/routing_agent_gateway.py
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/infr/client/routing_agent_gateway.py backend/tests/unit/test_routing_agent_gateway.py backend/ohs/dependencies.py doc/acp-gateway-implementation-plan.md
