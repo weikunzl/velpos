@@ -63,7 +63,11 @@ def _update_type(update: dict[str, Any]) -> str:
 def _text_message(update: dict[str, Any]) -> NormalizedMessage:
     text = update.get("text")
     if text is None:
-        text = update.get("content")
+        content = update.get("content")
+        if isinstance(content, dict):
+            text = content.get("text")
+        else:
+            text = content
     if text is None:
         text = update.get("delta")
     return {

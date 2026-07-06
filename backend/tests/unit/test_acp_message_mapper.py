@@ -23,6 +23,20 @@ class TestAcpMessageMapper(unittest.TestCase):
         self.assertEqual("assistant", message["message_type"])
         self.assertEqual([{"type": "text", "text": "hello"}], message["content"]["blocks"])
 
+    def test_maps_cursor_documented_agent_message_chunk(self) -> None:
+        message = map_acp_update(
+            {
+                "sessionId": "s1",
+                "update": {
+                    "sessionUpdate": "agent_message_chunk",
+                    "content": {"type": "text", "text": "hello"},
+                },
+            }
+        )
+
+        self.assertEqual("assistant", message["message_type"])
+        self.assertEqual([{"type": "text", "text": "hello"}], message["content"]["blocks"])
+
     def test_maps_tool_call_to_tool_use_block(self) -> None:
         message = map_acp_update(
             {

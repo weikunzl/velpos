@@ -61,7 +61,9 @@ class TestAcpGatewayLifecycle(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([{"type": "text", "text": "hello"}], messages[0]["content"]["blocks"])
         self.assertEqual(["initialize", "session/new", "session/prompt"], [item["method"] for item in transport.sent])
         self.assertEqual("/tmp/project", transport.sent[1]["params"]["cwd"])
+        self.assertEqual([], transport.sent[1]["params"]["mcpServers"])
         self.assertEqual("acp-session-1", transport.sent[2]["params"]["sessionId"])
+        self.assertEqual([{"type": "text", "text": "hi"}], transport.sent[2]["params"]["prompt"])
 
     async def test_connect_accepts_legacy_claude_kwargs_without_forwarding_them(self) -> None:
         transport = FakeTransport(
@@ -125,7 +127,7 @@ class TestAcpGatewayLifecycle(unittest.IsolatedAsyncioTestCase):
         messages = [message async for message in gateway.send_query("velpos-1", "again")]
 
         self.assertEqual("session/prompt", transport.sent[-1]["method"])
-        self.assertEqual("again", transport.sent[-1]["params"]["prompt"])
+        self.assertEqual([{"type": "text", "text": "again"}], transport.sent[-1]["params"]["prompt"])
         self.assertEqual("again", messages[0]["content"]["blocks"][0]["text"])
 
     async def test_disconnect_closes_transport_and_clears_state(self) -> None:

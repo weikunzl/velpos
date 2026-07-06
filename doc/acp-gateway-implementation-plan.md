@@ -465,6 +465,7 @@ git commit -m "test(acp): 增加 Cursor ACP 冒烟验证"
 - [x] `RoutingAgentGateway.provider_names()` exposes configured providers for create-session validation.
 - [x] `SessionApplicationService` rejects unsupported providers before persisting a session.
 - [x] `AcpGateway` sends `authenticate` when provider config declares `auth_method`.
+- [x] Real Cursor ACP smoke passed after aligning documented protocol shapes: `mcpServers: []`, prompt text blocks, and `content.text` chunks.
 
 ---
 

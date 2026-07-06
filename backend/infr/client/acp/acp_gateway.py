@@ -222,7 +222,7 @@ class AcpGateway(AgentGateway):
                     "cwd": cwd,
                     "model": model or self.provider.default_model,
                     "sessionId": sdk_session_id or "",
-                    "mcpServers": mcp_servers or {},
+                    "mcpServers": _mcp_servers_payload(mcp_servers),
                 },
             )
         except Exception:
@@ -254,7 +254,7 @@ class AcpGateway(AgentGateway):
                 "method": "session/prompt",
                 "params": {
                     "sessionId": connection.acp_session_id,
-                    "prompt": prompt,
+                    "prompt": [{"type": "text", "text": prompt}],
                 },
             }
         )
@@ -436,3 +436,15 @@ class AcpGateway(AgentGateway):
         if provider.transport != "stdio" or not provider.command:
             raise ValueError(f"Unsupported ACP provider transport: {provider.transport}")
         return StdioTransport(command=provider.command, args=provider.args, env=provider.env)
+
+
+def _mcp_servers_payload(mcp_servers: dict | list | None) -> list[Any]:
+    """Return ACP-compatible MCP server payload.
+
+    Cursor's documented minimal client sends an array for ``mcpServers``. Velpos
+    may still pass Claude-style mappings, so keep an empty list for the common
+    no-MCP case and pass through explicit list values.
+    """
+    if isinstance(mcp_servers, list):
+        return mcp_servers
+    return []

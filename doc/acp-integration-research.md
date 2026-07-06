@@ -379,6 +379,12 @@ VELPOS_RUN_CURSOR_ACP_TEST=1 uv run python -m unittest tests.integration.test_cu
 
 默认单元测试不会启动真实 `agent acp`；只有设置 `VELPOS_RUN_CURSOR_ACP_TEST=1` 且本机 `agent` 已认证时才执行。
 
+2026-07-06 实测记录：
+
+- `agent --version`: `2026.07.01-41b2de7`
+- `VELPOS_RUN_CURSOR_ACP_TEST=1 uv run python -m unittest tests.integration.test_cursor_acp_smoke -v`: PASS
+- 修正点：`session/new.mcpServers` 使用数组；`session/prompt.prompt` 使用 text block 数组；`session/update.agent_message_chunk` 从 `content.text` 读取文本。
+
 ### 10.4 与 cursor-gateway 的隔离测试
 
 - 确认 Velpos **不**依赖 `cursor-gateway` 的 8001 端口
