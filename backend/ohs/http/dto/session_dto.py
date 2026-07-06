@@ -19,6 +19,12 @@ class CreateSessionRequest(BaseModel):
         max_length=100,
         description="Claude model identifier",
     )
+    provider: str = Field(
+        default="claude",
+        min_length=1,
+        max_length=32,
+        description="Agent provider identifier, e.g. claude or cursor",
+    )
     project_id: str = Field(
         default="",
         max_length=8,
@@ -69,6 +75,7 @@ class BatchDeleteRequest(BaseModel):
 class SessionResponse(BaseModel):
     session_id: str
     project_id: str
+    provider: str = "claude"
     model: str
     status: str
     message_count: int
@@ -93,6 +100,7 @@ class SessionResponse(BaseModel):
         return cls(
             session_id=summary["session_id"],
             project_id=summary["project_id"],
+            provider=summary.get("provider", "claude"),
             model=summary["model"],
             status=summary["status"],
             message_count=summary["message_count"],
@@ -131,6 +139,7 @@ class SessionListResponse(BaseModel):
 class SessionDetailResponse(BaseModel):
     session_id: str
     project_id: str
+    provider: str = "claude"
     model: str
     status: str
     message_count: int
@@ -149,6 +158,7 @@ class SessionDetailResponse(BaseModel):
         return cls(
             session_id=summary["session_id"],
             project_id=summary["project_id"],
+            provider=summary.get("provider", "claude"),
             model=summary["model"],
             status=summary["status"],
             message_count=summary["message_count"],

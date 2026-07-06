@@ -67,6 +67,7 @@ async def create_session(
 ) -> ApiResponse[SessionResponse]:
     command = CreateSessionCommand(
         model=request.model,
+        provider=request.provider,
         project_id=request.project_id,
         project_dir=request.project_dir,
         name=request.name,

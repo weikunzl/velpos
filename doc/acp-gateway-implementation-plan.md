@@ -364,7 +364,7 @@ git commit -m "feat(acp): 接入权限与用户追问流程"
 - Create or modify Alembic migration if a persisted `provider` field is required
 - Create: `backend/tests/unit/test_agent_provider_selection.py`
 
-- [ ] **Step 1: Investigate session model and creation flow**
+- [x] **Step 1: Investigate session model and creation flow**
 
 Read:
 - `backend/domain/session/model/session.py`
@@ -374,14 +374,14 @@ Read:
 
 Document the exact selected field name in this plan before coding. Preferred field: `provider`.
 
-- [ ] **Step 2: Write failing provider selection tests**
+- [x] **Step 2: Write failing provider selection tests**
 
 Cover:
 - new session defaults to `claude`
 - session with `provider=cursor` binds routing gateway to cursor backend before first prompt
 - missing/unsupported provider fails with clear API error
 
-- [ ] **Step 3: Implement wiring**
+- [x] **Step 3: Implement wiring**
 
 Wire:
 - `_claude_agent_gateway`
@@ -390,14 +390,14 @@ Wire:
 
 Existing services should receive `_agent_gateway`, not Claude concrete implementation.
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 ```bash
 cd backend
 uv run python -m unittest discover -s tests/unit -p 'test_*.py' -v
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/ohs/dependencies.py backend/tests/unit/test_agent_provider_selection.py backend/application backend/domain backend/infr/repository doc/acp-gateway-implementation-plan.md

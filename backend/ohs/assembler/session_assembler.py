@@ -50,6 +50,7 @@ class SessionAssembler:
         return {
             "session_id": session.session_id,
             "project_id": session.project_id,
+            "provider": session.provider,
             "model": session.model,
             "status": session.status.value,
             "message_count": session.message_count,

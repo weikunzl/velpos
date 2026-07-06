@@ -80,6 +80,7 @@ class SessionRepositoryImpl(SessionRepository):
         return SessionModel(
             session_id=session.session_id,
             project_id=session.project_id,
+            provider=session.provider,
             model=session.model,
             status=session.status.value,
             messages=SessionRepositoryImpl._serialize_messages(session.messages),
@@ -111,6 +112,7 @@ class SessionRepositoryImpl(SessionRepository):
             messages=messages,
             usage=usage,
             continue_conversation=model.continue_conversation == 1,
+            provider=getattr(model, "provider", "claude") or "claude",
             project_id=model.project_id,
             project_dir=model.project_dir,
             name=model.name,

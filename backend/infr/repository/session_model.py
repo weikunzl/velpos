@@ -18,6 +18,9 @@ class SessionModel(Base):
     project_id: Mapped[str] = mapped_column(
         String(8), nullable=False, default="", server_default="",
     )
+    provider: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="claude", server_default="claude",
+    )
     model: Mapped[str] = mapped_column(
         String(64), nullable=False,
     )

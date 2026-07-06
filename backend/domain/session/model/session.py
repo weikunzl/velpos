@@ -15,6 +15,7 @@ from domain.session.model.usage import Usage
 class Session:
     _session_id: str
     _model: str
+    _provider: str
     _status: SessionStatus
     _messages: list[Message] = field(default_factory=list)
     _usage: Usage = field(default_factory=Usage.zero)
@@ -38,6 +39,10 @@ class Session:
     @property
     def model(self) -> str:
         return self._model
+
+    @property
+    def provider(self) -> str:
+        return self._provider
 
     @property
     def status(self) -> SessionStatus:
@@ -128,6 +133,7 @@ class Session:
         model: str = "",
         project_id: str = "",
         project_dir: str = "",
+        provider: str = "claude",
         team_task_id: str = "",
         trace_id: str = "",
     ) -> Session:
@@ -145,6 +151,7 @@ class Session:
         return cls(
             _session_id=session_id,
             _model=model,
+            _provider=provider or "claude",
             _status=SessionStatus.IDLE,
             _messages=[],
             _usage=Usage.zero(),
@@ -171,6 +178,7 @@ class Session:
         messages: list[Message],
         usage: Usage,
         continue_conversation: bool,
+        provider: str = "claude",
         project_id: str = "",
         project_dir: str = "",
         name: str = "",
@@ -192,6 +200,7 @@ class Session:
         return cls(
             _session_id=session_id,
             _model=model,
+            _provider=provider or "claude",
             _status=status,
             _messages=list(messages),
             _usage=usage,
@@ -410,6 +419,11 @@ class Session:
     def change_model(self, model: str) -> None:
         """Change the model for this session."""
         self._model = model
+        self._updated_time = datetime.now()
+
+    def change_provider(self, provider: str) -> None:
+        """Change the agent provider for this session."""
+        self._provider = provider or "claude"
         self._updated_time = datetime.now()
 
     def initialize_usage(self, input_tokens: int, output_tokens: int) -> None:

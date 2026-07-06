@@ -321,7 +321,12 @@ class SessionApplicationService:
 
         os.makedirs(project_dir, exist_ok=True)
 
-        session = Session.create(model=command.model, project_id=command.project_id, project_dir=project_dir)
+        session = Session.create(
+            model=command.model,
+            provider=command.provider,
+            project_id=command.project_id,
+            project_dir=project_dir,
+        )
 
         if command.name:
             session.rename(command.name.strip())

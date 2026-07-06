@@ -299,6 +299,7 @@ class SessionQueryEngine:
             )
 
         session.start_query()
+        self._bind_agent_provider(session)
         self._claude_agent_gateway.mark_active(command.session_id)
 
         message_id = uuid.uuid4().hex[:12]
@@ -320,6 +321,12 @@ class SessionQueryEngine:
             actual_prompt=actual_prompt,
             team_config={},
         )
+
+    def _bind_agent_provider(self, session: Session) -> None:
+        """Bind a session to its selected provider when the gateway supports it."""
+        bind_provider = getattr(self._claude_agent_gateway, "bind_session_provider", None)
+        if callable(bind_provider):
+            bind_provider(session.session_id, session.provider)
 
     # ------------------------------------------------------------------
     # Phase 2: Execute streaming SDK interaction

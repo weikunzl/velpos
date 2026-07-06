@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,12 +37,15 @@ from application.terminal.terminal_application_service import TerminalApplicatio
 from application.team_task.team_coordinator_service import TeamCoordinatorService
 from application.usage.usage_governance_application_service import UsageGovernanceApplicationService
 from infr.client.claude_agent_gateway import ClaudeAgentGateway
+from infr.client.acp.acp_gateway import AcpGateway
+from infr.client.acp.provider import load_agent_providers
 from infr.client.claude_command_gateway import ClaudeCommandGateway
 from infr.client.claude_plugin_manager import ClaudePluginManager
 from infr.client.claude_session_manager import ClaudeSessionManagerImpl
 from infr.client.connection_manager import ConnectionManager
 from infr.client.im_api_gateway import ImApiGateway
 from infr.client.im_ws_client import ImWsClient
+from infr.client.routing_agent_gateway import RoutingAgentGateway
 from infr.client.settings_file_service import SettingsFileService
 from infr.client.terminal_executor import TerminalExecutor
 from infr.config.database import get_async_session
@@ -78,6 +82,17 @@ logger = logging.getLogger(__name__)
 
 _connection_manager = ConnectionManager()
 _claude_agent_gateway = ClaudeAgentGateway()
+_agent_provider_registry = load_agent_providers(
+    Path(__file__).resolve().parents[1] / "infr" / "config" / "agent_providers.yaml",
+)
+_acp_gateway = AcpGateway(_agent_provider_registry.get("cursor"))
+_agent_gateway = RoutingAgentGateway(
+    default_provider="claude",
+    backends={
+        "claude": _claude_agent_gateway,
+        "cursor": _acp_gateway,
+    },
+)
 _claude_plugin_manager = ClaudePluginManager()
 _claude_command_gateway = ClaudeCommandGateway()
 _claude_session_manager = ClaudeSessionManagerImpl()
@@ -126,9 +141,9 @@ _session_coordinator = SessionEventCoordinator(
     connection_manager=_connection_manager,
     im_channel_registry=_im_channel_registry,
 )
-_claude_agent_gateway.set_broadcast_fn(_session_coordinator.broadcast_with_im)
-_claude_agent_gateway.set_is_im_bound_fn(_session_coordinator.is_session_im_bound)
-_claude_agent_gateway.set_persist_pending_request_context_fn(_session_coordinator.persist_pending_request_context)
+_agent_gateway.set_broadcast_fn(_session_coordinator.broadcast_with_im)
+_agent_gateway.set_is_im_bound_fn(_session_coordinator.is_session_im_bound)
+_agent_gateway.set_persist_pending_request_context_fn(_session_coordinator.persist_pending_request_context)
 _connection_manager.register_broadcast_hook(_session_coordinator.timeline_broadcast_hook)
 
 
@@ -283,8 +298,8 @@ def get_settings_application_service() -> SettingsApplicationService:
     )
 
 
-def get_claude_agent_gateway() -> ClaudeAgentGateway:
-    return _claude_agent_gateway
+def get_claude_agent_gateway() -> RoutingAgentGateway:
+    return _agent_gateway
 
 
 def get_terminal_application_service() -> TerminalApplicationService:
@@ -336,8 +351,8 @@ async def get_im_channel_application_service(
         init_repo=init_repo,
         session_service_factory=_create_session_service,
         connection_manager=_connection_manager,
-        get_pending_request_context_fn=_claude_agent_gateway.get_pending_request_context,
-        resolve_user_response_fn=_claude_agent_gateway.resolve_user_response,
+        get_pending_request_context_fn=_agent_gateway.get_pending_request_context,
+        resolve_user_response_fn=_agent_gateway.resolve_user_response,
     )
 
 
@@ -357,7 +372,7 @@ async def _create_session_service(
 
     return SessionApplicationService(
         session_repository=SessionRepositoryImpl(db_session),
-        claude_agent_gateway=_claude_agent_gateway,
+        claude_agent_gateway=_agent_gateway,
         connection_manager=_connection_manager,
         claude_session_manager=_claude_session_manager,
         on_assistant_response=_session_coordinator.on_assistant_response,
@@ -511,7 +526,7 @@ async def get_team_coordinator_service(
         project_repository=ProjectRepositoryImpl(db_session),
         session_repository=SessionRepositoryImpl(db_session),
         team_task_repository=TeamTaskRepositoryImpl(db_session),
-        claude_agent_gateway=_claude_agent_gateway,
+        claude_agent_gateway=_agent_gateway,
         connection_manager=_connection_manager,
         notify_im_fn=_session_coordinator.on_assistant_response,
         agent_application_service=agent_service,

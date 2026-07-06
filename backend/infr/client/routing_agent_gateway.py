@@ -43,6 +43,27 @@ class RoutingAgentGateway(AgentGateway):
         self._ensure_provider(provider)
         self._session_providers[session_id] = provider
 
+    def set_broadcast_fn(self, fn) -> None:
+        """Forward broadcast callback to backends that support it."""
+        for backend in self.backends.values():
+            setter = getattr(backend, "set_broadcast_fn", None)
+            if callable(setter):
+                setter(fn)
+
+    def set_is_im_bound_fn(self, fn) -> None:
+        """Forward IM-bound callback to backends that support it."""
+        for backend in self.backends.values():
+            setter = getattr(backend, "set_is_im_bound_fn", None)
+            if callable(setter):
+                setter(fn)
+
+    def set_persist_pending_request_context_fn(self, fn) -> None:
+        """Forward pending request persistence callback to supported backends."""
+        for backend in self.backends.values():
+            setter = getattr(backend, "set_persist_pending_request_context_fn", None)
+            if callable(setter):
+                setter(fn)
+
     def get_session_provider(self, session_id: str) -> str:
         """Return the provider for a session, falling back to default."""
         return self._session_providers.get(session_id, self.default_provider)
@@ -101,6 +122,19 @@ class RoutingAgentGateway(AgentGateway):
         sdk_session_id: str | None = None,
     ) -> None:
         await self._backend_for(session_id).open_connection(session_id, model, cwd, sdk_session_id)
+
+    async def open_fresh_connection(
+        self,
+        session_id: str,
+        model: str,
+        cwd: str = "",
+    ) -> None:
+        backend = self._backend_for(session_id)
+        method = getattr(backend, "open_fresh_connection", None)
+        if callable(method):
+            await method(session_id, model, cwd)
+            return
+        await backend.open_connection(session_id, model, cwd, "")
 
     async def send_query(self, session_id: str, prompt: str) -> AsyncIterator[NormalizedMessage]:
         async for message in self._backend_for(session_id).send_query(session_id, prompt):
@@ -162,6 +196,13 @@ class RoutingAgentGateway(AgentGateway):
     async def resolve_user_response(self, session_id: str, response_data: dict[str, Any]) -> bool:
         return await self._backend_for(session_id).resolve_user_response(session_id, response_data)
 
+    async def cancel_pending_response(self, session_id: str) -> bool:
+        backend = self._backend_for(session_id)
+        method = getattr(backend, "cancel_pending_response", None)
+        if callable(method):
+            return await method(session_id)
+        return False
+
     async def get_pending_request_context(self, session_id: str) -> dict[str, Any] | None:
         return await self._backend_for(session_id).get_pending_request_context(session_id)
 
@@ -177,3 +218,17 @@ class RoutingAgentGateway(AgentGateway):
 
     def delete_session_files(self, session_id: str, project_dir: str) -> None:
         self._backend_for(session_id).delete_session_files(session_id, project_dir)
+
+    def get_cached_sdk_session_id(self, session_id: str) -> str | None:
+        backend = self._backend_for(session_id)
+        method = getattr(backend, "get_cached_sdk_session_id", None)
+        if callable(method):
+            return method(session_id)
+        return None
+
+    async def get_models_for_channel(self, host: str = "", api_key: str = "") -> list[dict[str, Any]]:
+        backend = self.backends[self.default_provider]
+        method = getattr(backend, "get_models_for_channel", None)
+        if callable(method):
+            return await method(host, api_key)
+        return await backend.get_models()

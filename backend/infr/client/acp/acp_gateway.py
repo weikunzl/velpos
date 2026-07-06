@@ -172,6 +172,10 @@ class AcpGateway(AgentGateway):
             future.set_result(response_data)
             return True
 
+    async def cancel_pending_response(self, session_id: str) -> bool:
+        future = await self._cancel_pending_response(session_id)
+        return future is not None
+
     async def get_pending_request_context(self, session_id: str) -> dict[str, Any] | None:
         async with self._lock:
             future = self._pending_user_responses.get(session_id)
@@ -412,12 +416,13 @@ class AcpGateway(AgentGateway):
         if inspect.isawaitable(result):
             await result
 
-    async def _cancel_pending_response(self, session_id: str) -> None:
+    async def _cancel_pending_response(self, session_id: str) -> asyncio.Future[dict[str, Any]] | None:
         async with self._lock:
             future = self._pending_user_responses.pop(session_id, None)
             self._pending_request_context.pop(session_id, None)
         if future is not None and not future.done():
             future.cancel()
+        return future
 
     @staticmethod
     def _default_transport_factory(provider: AgentProviderConfig) -> AcpTransport:
