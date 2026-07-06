@@ -334,11 +334,13 @@ class SessionApplicationService:
 
         await self._save_session(session, commit=True)
 
-        await self._claude_agent_gateway.set_permission_mode(
-            session.session_id, "bypassPermissions"
-        )
+        self._bind_agent_provider(session.session_id, session.provider)
 
-        safe_create_task(self._bind_sdk_session(session.session_id, session.model, project_dir))
+        if session.provider == "claude":
+            await self._claude_agent_gateway.set_permission_mode(
+                session.session_id, "bypassPermissions"
+            )
+            safe_create_task(self._bind_sdk_session(session.session_id, session.model, project_dir))
 
         return session
 
@@ -446,6 +448,12 @@ class SessionApplicationService:
         if provider not in allowed:
             raise BusinessException(f"Unsupported agent provider: {provider}")
 
+    def _bind_agent_provider(self, session_id: str, provider: str) -> None:
+        """Bind a persisted session to its agent provider as early as possible."""
+        bind_provider = getattr(self._claude_agent_gateway, "bind_session_provider", None)
+        if callable(bind_provider):
+            bind_provider(session_id, provider)
+
     # ── Context management ───────────────────────────────────
 
     async def clear_context(self, command: ClearContextCommand) -> None:
@@ -527,42 +535,8 @@ class SessionApplicationService:
 
     # ── Connection management ────────────────────────────────
 
-    async def prewarm_connection(self, session_id: str) -> None:
-        if self._claude_agent_gateway.is_connected(session_id):
-            return
-
-        session = await self._session_repository.find_by_id(session_id)
-        if session is None or not session.sdk_session_id:
-            return
-
-        try:
-            resume_sdk_session_id = await self._resolve_resume_sdk_session_id(session)
-            if not resume_sdk_session_id:
-                return
-            await self._claude_agent_gateway.open_connection(
-                session_id=session_id,
-                model=session.model,
-                cwd=session.project_dir,
-                sdk_session_id=resume_sdk_session_id,
-            )
-            logger.info("[session=%s] SDK 连接预热完成", session_id)
-        except RuntimeError as e:
-            if "resume failed" in str(e).lower() or "no longer exists" in str(e).lower():
-                session.update_sdk_session_id("")
-                await self._save_session(session, commit=True)
-                logger.warning(
-                    "[session=%s] SDK 连接预热 resume 失败, 已清除 stale sdk_session_id",
-                    session_id,
-                )
-            else:
-                logger.warning("[session=%s] SDK 连接预热失败: %s", session_id, e)
-        except Exception as e:
-            logger.warning("[session=%s] SDK 连接预热失败: %s", session_id, e)
-
     async def refresh_context_usage(self, session_id: str) -> Session:
         session = await self.get_session(session_id)
-        if not self._claude_agent_gateway.is_connected(session_id) and session.sdk_session_id:
-            await self.prewarm_connection(session_id)
         if await self._refresh_context_usage(session):
             await self._save_session(session, commit=True)
         return session
@@ -587,7 +561,10 @@ class SessionApplicationService:
             payload={"mode": mode},
         )
 
-    async def get_models(self) -> list[dict]:
+    async def get_models(self, provider: str | None = None) -> list[dict]:
+        get_for_provider = getattr(self._claude_agent_gateway, "get_models_for_provider", None)
+        if callable(get_for_provider) and provider:
+            return await get_for_provider(provider)
         return await self._claude_agent_gateway.get_models()
 
     async def resolve_user_response(self, session_id: str, response_data: dict) -> bool:

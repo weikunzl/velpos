@@ -449,17 +449,6 @@ async def websocket_endpoint(
                     "tool_input": pending_ctx.get("tool_input", ""),
                 })
 
-        # Pre-warm SDK connection in background so first query is faster
-        if session.sdk_session_id and not service.is_agent_connected(session_id):
-            async def _prewarm_background() -> None:
-                bg_svc = await session_service_factory()
-                try:
-                    await bg_svc.prewarm_connection(session_id)
-                finally:
-                    await bg_svc.close()
-
-            safe_create_task(_prewarm_background())
-
         async def _submit_query_background(command: RunQueryCommand) -> None:
             bg_service = await session_service_factory()
             try:

@@ -1,5 +1,6 @@
 import { ref, watch } from 'vue'
 import { useGlobalHotkeys } from '@shared/lib/useGlobalHotkeys'
+import { resolveSessionProvider } from '@shared/lib/constants'
 
 const permModes = [
   { value: 'default', label: 'Default' },
@@ -27,7 +28,7 @@ export function usePermissionMode({ session, currentSessionId, wsConnection }) {
   // localStorage is authoritative (user's explicit choice).
   // Backend value is only used as seed when no local record exists.
   watch(session, (s) => {
-    if (!s) return
+    if (!s || resolveSessionProvider(s) !== 'claude') return
     const key = _permStorageKey(s.session_id)
     const stored = key && localStorage.getItem(key)
     if (stored) {

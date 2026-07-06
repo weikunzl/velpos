@@ -316,6 +316,61 @@ class Session:
         self._messages.append(message)
 
     @staticmethod
+    def _is_text_only_assistant_content(content: dict[str, Any]) -> bool:
+        blocks = content.get("blocks")
+        if not isinstance(blocks, list) or not blocks:
+            return False
+        return all(
+            isinstance(block, dict) and block.get("type") == "text"
+            for block in blocks
+        )
+
+    @staticmethod
+    def _assistant_text_from_content(content: dict[str, Any]) -> str:
+        blocks = content.get("blocks", [])
+        if not isinstance(blocks, list):
+            return ""
+        return "".join(
+            str(block.get("text", ""))
+            for block in blocks
+            if isinstance(block, dict) and block.get("type") == "text"
+        )
+
+    def merge_or_add_message(self, message: Message) -> tuple[Message, bool]:
+        """Append a message or merge text into the last assistant message.
+
+        Consecutive assistant messages that contain only text blocks are merged
+        so streaming backends (e.g. ACP ``agent_message_chunk``) persist as one
+        assistant bubble.
+
+        Returns:
+            The stored message and whether an in-place merge happened.
+        """
+        if message is None:
+            raise ValueError("message must not be None")
+
+        if (
+            message.message_type == MessageType.ASSISTANT
+            and self._messages
+            and self._messages[-1].message_type == MessageType.ASSISTANT
+            and self._is_text_only_assistant_content(message.content)
+            and self._is_text_only_assistant_content(self._messages[-1].content)
+        ):
+            merged_text = (
+                self._assistant_text_from_content(self._messages[-1].content)
+                + self._assistant_text_from_content(message.content)
+            )
+            merged = Message.create(
+                message_type=MessageType.ASSISTANT,
+                content={"blocks": [{"type": "text", "text": merged_text}]},
+            )
+            self._messages[-1] = merged
+            return merged, True
+
+        self.add_message(message)
+        return message, False
+
+    @staticmethod
     def _validate_token_counts(input_tokens: int, output_tokens: int) -> None:
         if input_tokens < 0:
             raise ValueError("input_tokens must be >= 0")

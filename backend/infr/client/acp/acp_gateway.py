@@ -294,10 +294,13 @@ class AcpGateway(AgentGateway):
                     continue
                 if message.get("method") == "session/update":
                     params = message.get("params") or {}
-                    yield map_acp_update(params)
+                    mapped = map_acp_update(params)
+                    if mapped is not None:
+                        yield mapped
                     continue
                 if message.get("id") == request_id:
                     self._raise_if_error("session/prompt", message)
+                    yield _synthetic_result_message(message.get("result"))
                     return
         except AcpPromptCancelled:
             return
@@ -486,8 +489,27 @@ class AcpGateway(AgentGateway):
         request_id: Any,
         params: dict[str, Any],
     ) -> dict[str, Any]:
-        tool_name = str(params.get("toolName") or params.get("tool_name") or "")
-        tool_input = params.get("toolInput") or params.get("tool_input") or {}
+        tool_call = params.get("toolCall") or params.get("tool_call") or {}
+        if not isinstance(tool_call, dict):
+            tool_call = {}
+
+        tool_name = str(
+            params.get("toolName")
+            or params.get("tool_name")
+            or tool_call.get("title")
+            or tool_call.get("name")
+            or tool_call.get("toolName")
+            or tool_call.get("kind")
+            or ""
+        )
+        tool_input = (
+            params.get("toolInput")
+            or params.get("tool_input")
+            or tool_call.get("input")
+            or tool_call.get("toolInput")
+            or tool_call.get("rawInput")
+            or {}
+        )
         event_data = {
             "event": "permission_request",
             "tool_name": tool_name,
@@ -593,3 +615,21 @@ def _mcp_servers_payload(mcp_servers: dict | list | None) -> list[Any]:
     if isinstance(mcp_servers, list):
         return mcp_servers
     return []
+
+
+def _synthetic_result_message(result: Any) -> NormalizedMessage:
+    """Emit a Claude-compatible result when an ACP prompt turn completes."""
+    result_dict = result if isinstance(result, dict) else {}
+    return {
+        "message_type": "result",
+        "content": {
+            "text": "",
+            "duration_ms": 0,
+            "duration_api_ms": 0,
+            "num_turns": 1,
+            "is_error": False,
+            "total_cost_usd": 0,
+            "stop_reason": result_dict.get("stopReason") or "end_turn",
+            "usage": {"input_tokens": 0, "output_tokens": 0},
+        },
+    }

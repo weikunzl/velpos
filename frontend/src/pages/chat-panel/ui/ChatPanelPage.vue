@@ -3,7 +3,7 @@ import { ref, computed, inject, onMounted, onBeforeUnmount, watch, nextTick } fr
 import { useGlobalHotkeys } from '@shared/lib/useGlobalHotkeys'
 import { formatDuration } from '@features/message-display'
 import { useDialogManager } from '@shared/lib/useDialogManager'
-import { useSession, listModels, createSessionBranch, listSessionBranches, compareSessions, convergeSessionBranches } from '@entities/session'
+import { useSession, listModels, createSessionBranch, listSessionBranches, compareSessions, convergeSessionBranches, useAgentProvider } from '@entities/session'
 import { useProject, getGitBranches, checkoutGitBranch } from '@entities/project'
 import { MessageInput, useSendMessage } from '@features/send-message'
 import { useCancelQuery, QueryRuntimeBar, useQueryElapsed } from '@features/cancel-query'
@@ -31,6 +31,7 @@ const {
   queryHistory, queryStartedAt, setCurrentSessionId, updateSession, setError, setCanceling, addSession,
   restoredPrompt, setRestoredPrompt,
 } = useSession()
+const { provider, isClaude, isCursor, label: agentProviderLabel, showClaudeControls } = useAgentProvider(session)
 const { currentProject, updateProjectInList } = useProject()
 const { isMobile } = useViewport()
 const { debugMode, runtimePanelVisible, toggleDebug, toggleRuntimePanel } = useChatPanelTools()
@@ -188,13 +189,24 @@ useDialog('command-palette', cmdVisible)
 
 const { compacting, compactContext } = useCompactContext()
 
-onMounted(async () => {
+async function refreshAvailableModels() {
+  if (isCursor.value) {
+    availableModels.value = []
+    return
+  }
   try {
-    const res = await listModels()
+    const res = await listModels('claude')
     availableModels.value = res || []
   } catch {
-    // fallback to empty — user can still type model names
+    availableModels.value = []
   }
+}
+
+watch(provider, () => {
+  refreshAvailableModels()
+}, { immediate: true })
+
+onMounted(async () => {
   // Fetch available IM channels and binding status for current session
   fetchImChannels()
   if (currentSessionId.value) {
@@ -211,6 +223,7 @@ onBeforeUnmount(() => {
 })
 
 function handleCompact() {
+  if (!showClaudeControls.value) return
   compactContext(currentSessionId.value)
 }
 
@@ -863,6 +876,10 @@ function copyToClipboard(text, chipName) {
 
 function copySessionResumeCommand() {
   window.dispatchEvent(new CustomEvent('vp-scroll-to-session', { detail: { sessionId: currentSessionId.value } }))
+  if (isCursor.value) {
+    copyToClipboard(session.value?.sdk_session_id || currentSessionId.value, 'session')
+    return
+  }
   if (claudeResumeCommand.value) {
     copyToClipboard(claudeResumeCommand.value, 'session')
   }
@@ -1027,7 +1044,13 @@ function formatMaxTokens(n) {
     <div v-if="isSessionLoading" class="session-loading-state">
       <div class="session-loading-spinner"></div>
     </div>
-    <MessageList v-else :messages="displayMessages" :has-more="hasMoreMessages" @load-more="loadMoreMessages">
+    <MessageList
+      v-else
+      :messages="displayMessages"
+      :has-more="hasMoreMessages"
+      :agent-provider="provider"
+      @load-more="loadMoreMessages"
+    >
       <template #footer>
         <div v-if="showRecoveryHint" class="recovery-indicator">
           <span class="recovery-badge">Recovered</span>
@@ -1195,7 +1218,7 @@ function formatMaxTokens(n) {
         </button>
         </div>
         <!-- Group 2: Configuration -->
-        <div class="toolbar-group">
+        <div v-if="showClaudeControls" class="toolbar-group">
         <button
           class="toolbar-btn"
           :class="{ 'toolbar-btn--active': currentAgentInfo }"
@@ -1305,10 +1328,12 @@ function formatMaxTokens(n) {
           </div>
         </div>
         <CommandPaletteButton
+          v-if="showClaudeControls"
           :disabled="!currentSessionId"
           @click="handleCommandsClick"
         />
         <ClearContextButton
+          v-if="showClaudeControls"
           :disabled="isRunning || !currentSessionId"
           :clearing="clearing"
           @clear="handleClear"
@@ -1401,9 +1426,11 @@ function formatMaxTokens(n) {
         <button
           class="context-bar-btn"
           :class="contextColorClass"
-          :disabled="isRunning || compacting || !currentSessionId"
+          :disabled="isRunning || compacting || !currentSessionId || !showClaudeControls"
           @click.stop="handleCompact"
-          :title="`Context: ${contextUsage.current.toLocaleString()} / ${contextUsage.max.toLocaleString()} tokens — Click to compact`"
+          :title="showClaudeControls
+            ? `Context: ${contextUsage.current.toLocaleString()} / ${contextUsage.max.toLocaleString()} tokens — Click to compact`
+            : `Context: ${contextUsage.current.toLocaleString()} / ${contextUsage.max.toLocaleString()} tokens`"
         >
           <span class="context-bar-track">
             <span
@@ -1473,7 +1500,9 @@ function formatMaxTokens(n) {
           <button
             class="dash-chip dash-session-id"
             :class="{ 'dash-chip--copied': copiedChip === 'session' }"
-            :title="claudeResumeCommand ? `${claudeResumeCommand} — Click to locate & copy` : 'Click to locate session'"
+            :title="showClaudeControls && claudeResumeCommand
+              ? `${claudeResumeCommand} — Click to locate & copy`
+              : 'Click to locate session'"
             @click.stop="copySessionResumeCommand"
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1489,7 +1518,10 @@ function formatMaxTokens(n) {
             </svg>
             {{ sessionElapsed }}
           </span>
-          <div class="dropdown-wrapper" @click.stop>
+          <span v-if="isCursor" class="dash-chip dash-provider" title="Agent provider">
+            {{ agentProviderLabel }}
+          </span>
+          <div v-if="showClaudeControls" class="dropdown-wrapper" @click.stop>
             <button
               class="dash-chip dash-model"
               :disabled="!currentSessionId"
@@ -1520,6 +1552,9 @@ function formatMaxTokens(n) {
             </div>
             </Transition>
           </div>
+          <span v-else-if="currentSessionId" class="dash-chip dash-model" title="Agent model">
+            {{ getModelLabel(currentModel) }}
+          </span>
           <div class="dropdown-wrapper" @click.stop>
             <button
               class="dash-chip dash-branch"
@@ -1553,7 +1588,7 @@ function formatMaxTokens(n) {
             </div>
             </Transition>
           </div>
-          <div class="dropdown-wrapper" @click.stop>
+          <div v-if="showClaudeControls" class="dropdown-wrapper" @click.stop>
             <button
               class="dash-chip dash-perm"
               :class="[getPermColorClass(currentPermMode)]"
@@ -1766,7 +1801,7 @@ function formatMaxTokens(n) {
               <div v-if="compareResult.code_diff.truncated" class="compare-truncated">Patch truncated</div>
             </div>
             <div class="compare-actions">
-              <button class="secondary-btn" @click="handleAnalyzeCompare">Ask Claude to analyze</button>
+              <button v-if="showClaudeControls" class="secondary-btn" @click="handleAnalyzeCompare">Ask Claude to analyze</button>
             </div>
           </div>
         </div>

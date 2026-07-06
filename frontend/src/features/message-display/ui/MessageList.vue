@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { ref, watch, nextTick, onMounted, onBeforeUnmount, computed } from 'vue'
 import MessageItem from './MessageItem.vue'
 
 const props = defineProps({
@@ -11,9 +11,19 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  agentProvider: {
+    type: String,
+    default: 'claude',
+  },
 })
 
 const emit = defineEmits(['load-more'])
+
+const emptyDescription = computed(() => (
+  props.agentProvider === 'cursor'
+    ? 'Send a prompt to start interacting with Cursor Agent'
+    : 'Send a prompt to start interacting with Claude Code'
+))
 
 const messagesContainer = ref(null)
 const isNearBottom = ref(true)
@@ -139,7 +149,7 @@ onBeforeUnmount(() => {
             </svg>
           </div>
           <div class="empty-title">Velpos</div>
-          <div class="empty-desc">Send a prompt to start interacting with Claude Code</div>
+          <div class="empty-desc">{{ emptyDescription }}</div>
         </div>
         <MessageItem
           v-for="msg in messages"

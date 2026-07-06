@@ -13,3 +13,7 @@ export const AGENT_PROVIDERS = Object.freeze([
   { id: 'claude', label: 'Claude Code' },
   { id: 'cursor', label: 'Cursor ACP' },
 ])
+
+export function resolveSessionProvider(session) {
+  return session?.provider || 'claude'
+}

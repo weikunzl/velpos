@@ -172,6 +172,10 @@ class RoutingAgentGateway(AgentGateway):
     async def get_models(self) -> list[dict[str, Any]]:
         return await self.backends[self.default_provider].get_models()
 
+    async def get_models_for_provider(self, provider: str) -> list[dict[str, Any]]:
+        self._ensure_provider(provider)
+        return await self.backends[provider].get_models()
+
     def is_connected(self, session_id: str) -> bool:
         return self._backend_for(session_id).is_connected(session_id)
 

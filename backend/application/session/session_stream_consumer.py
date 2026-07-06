@@ -137,14 +137,15 @@ class SessionStreamConsumer:
                     )
                     continue
 
-                session.add_message(message)
-                message_count += 1
+                stored_message, merged = session.merge_or_add_message(message)
+                if not merged:
+                    message_count += 1
 
                 sdk_uuid = msg_dict.get("sdk_user_message_uuid")
                 if sdk_uuid:
                     session.set_sdk_uuid_for_last_user_message(sdk_uuid)
 
-                tool_names = self._tool_names_from_content(message.content)
+                tool_names = self._tool_names_from_content(stored_message.content)
                 tool_count += len(tool_names)
 
                 logger.info(
@@ -153,23 +154,30 @@ class SessionStreamConsumer:
                     msg_type_str,
                 )
 
+                broadcast_data: dict[str, Any] = {
+                    "type": stored_message.message_type.value,
+                    "content": stored_message.content,
+                }
+                if merged:
+                    broadcast_data["update_last"] = True
                 await self._connection_manager.broadcast(
                     session.session_id,
-                    {"event": "message", "data": {"type": message.message_type.value, "content": message.content}},
+                    {"event": "message", "data": broadcast_data},
                 )
-                for event_type, title, payload in self._recorder.timeline_events_for_message(
-                    msg_type_str,
-                    message.content,
-                    msg_dict,
-                ):
-                    await self._recorder.record_timeline_event(
-                        session.session_id,
-                        run_id,
-                        event_type,
-                        title,
-                        payload,
-                        status="failed" if payload.get("is_error") else "completed",
-                    )
+                if not merged:
+                    for event_type, title, payload in self._recorder.timeline_events_for_message(
+                        msg_type_str,
+                        stored_message.content,
+                        msg_dict,
+                    ):
+                        await self._recorder.record_timeline_event(
+                            session.session_id,
+                            run_id,
+                            event_type,
+                            title,
+                            payload,
+                            status="failed" if payload.get("is_error") else "completed",
+                        )
                 await self._recorder.progress_run_step(
                     stream_step,
                     {

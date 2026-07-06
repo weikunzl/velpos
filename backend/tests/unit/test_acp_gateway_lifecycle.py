@@ -59,6 +59,7 @@ class TestAcpGatewayLifecycle(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("connected", gateway.get_state("velpos-1"))
         self.assertEqual("auto", gateway.get_connected_model("velpos-1"))
         self.assertEqual([{"type": "text", "text": "hello"}], messages[0]["content"]["blocks"])
+        self.assertEqual("result", messages[-1]["message_type"])
         self.assertEqual(["initialize", "session/new", "session/prompt"], [item["method"] for item in transport.sent])
         self.assertEqual("/tmp/project", transport.sent[1]["params"]["cwd"])
         self.assertEqual([], transport.sent[1]["params"]["mcpServers"])
@@ -129,6 +130,7 @@ class TestAcpGatewayLifecycle(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("session/prompt", transport.sent[-1]["method"])
         self.assertEqual([{"type": "text", "text": "again"}], transport.sent[-1]["params"]["prompt"])
         self.assertEqual("again", messages[0]["content"]["blocks"][0]["text"])
+        self.assertEqual("result", messages[-1]["message_type"])
 
     async def test_disconnect_closes_transport_and_clears_state(self) -> None:
         transport = FakeTransport(

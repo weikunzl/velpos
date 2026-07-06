@@ -107,18 +107,29 @@ function updateSessionFor(sessionId, data) {
 function addMessageTo(sessionId, msg) {
   const state = _ensureState(sessionId)
   if (!state) return
-  if (!msg.timestamp) msg.timestamp = Date.now()
-  _assignIdFor(state, msg)
-  state.messages.push(msg)
+  const updateLast = Boolean(msg.update_last)
+  const { update_last: _ignored, ...stored } = msg
+  if (!stored.timestamp) stored.timestamp = Date.now()
+
+  if (updateLast && state.messages.length > 0) {
+    const last = state.messages[state.messages.length - 1]
+    if (last.type === stored.type) {
+      last.content = stored.content
+      return
+    }
+  }
+
+  _assignIdFor(state, stored)
+  state.messages.push(stored)
   // Collect result messages into queryHistory
-  if (msg.type === 'result' && msg.content) {
+  if (stored.type === 'result' && stored.content) {
     state.queryHistory.push({
       timestamp: Date.now(),
-      duration_ms: msg.content.duration_ms || 0,
-      num_turns: msg.content.num_turns || 0,
-      is_error: msg.content.is_error || false,
-      usage: msg.content.usage || { input_tokens: 0, output_tokens: 0 },
-      total_cost_usd: msg.content.total_cost_usd || 0,
+      duration_ms: stored.content.duration_ms || 0,
+      num_turns: stored.content.num_turns || 0,
+      is_error: stored.content.is_error || false,
+      usage: stored.content.usage || { input_tokens: 0, output_tokens: 0 },
+      total_cost_usd: stored.content.total_cost_usd || 0,
     })
   }
 }

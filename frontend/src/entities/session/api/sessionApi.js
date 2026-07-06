@@ -42,8 +42,9 @@ export function importClaudeSession(claudeSessionId, cwd, name = '') {
   })
 }
 
-export function listModels() {
-  return get('/sessions/meta/models')
+export function listModels(provider = '') {
+  const query = provider ? `?provider=${encodeURIComponent(provider)}` : ''
+  return get(`/sessions/meta/models${query}`)
 }
 
 export function fetchSessionTimelineEvents(sessionId, limit = 500, eventTypes = []) {

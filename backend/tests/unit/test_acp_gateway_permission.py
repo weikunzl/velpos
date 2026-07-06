@@ -81,6 +81,7 @@ class TestAcpGatewayPermission(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(resolved)
         self.assertEqual("ok", messages[0]["content"]["blocks"][0]["text"])
+        self.assertEqual("result", messages[-1]["message_type"])
         permission_response = [item for item in transport.sent if item.get("id") == 90][0]
         self.assertEqual({"outcome": "allow"}, permission_response["result"])
 
@@ -165,6 +166,42 @@ class TestAcpGatewayPermission(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([{"id": "q1", "prompt": "Continue?"}], events[0]["questions"])
         choice_response = [item for item in transport.sent if item.get("id") == 91][0]
         self.assertEqual({"answers": {"q1": "yes"}}, choice_response["result"])
+
+    async def test_permission_request_reads_nested_tool_call_payload(self) -> None:
+        transport = FakeTransport(
+            [
+                {"jsonrpc": "2.0", "id": 1, "result": {}},
+                {"jsonrpc": "2.0", "id": 2, "result": {"sessionId": "acp-session-1"}},
+                {
+                    "jsonrpc": "2.0",
+                    "id": 90,
+                    "method": "session/request_permission",
+                    "params": {
+                        "toolCall": {
+                            "title": "write_file",
+                            "rawInput": {"path": "a.txt"},
+                        }
+                    },
+                },
+                {"jsonrpc": "2.0", "id": 3, "result": {}},
+            ]
+        )
+        events: list[dict[str, Any]] = []
+        gateway = await self._connected_gateway(transport)
+        gateway.set_broadcast_fn(lambda _sid, event: events.append(event))
+
+        task = self._asyncio_create_task(
+            self._collect_messages(gateway.connect("velpos-1", "auto", "hi"))
+        )
+        await self._wait_for(lambda: bool(events))
+        await gateway.resolve_user_response("velpos-1", {"decision": "allow"})
+        await task
+
+        self.assertEqual("write_file", events[0]["tool_name"])
+        self.assertIn("a.txt", events[0]["tool_input"])
+
+    async def _collect_messages(self, stream):
+        return [message async for message in stream]
 
     async def _wait_for(self, predicate, attempts: int = 20) -> None:
         for _ in range(attempts):

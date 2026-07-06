@@ -328,6 +328,13 @@ class SessionQueryEngine:
         if callable(bind_provider):
             bind_provider(session.session_id, session.provider)
 
+    def _should_auto_continue(self, session: Session) -> bool:
+        """ACP/Cursor turns complete without Claude-style ResultMessage semantics."""
+        get_provider = getattr(self._claude_agent_gateway, "get_session_provider", None)
+        if callable(get_provider):
+            return get_provider(session.session_id) != "cursor"
+        return True
+
     # ------------------------------------------------------------------
     # Phase 2: Execute streaming SDK interaction
     # ------------------------------------------------------------------
@@ -463,7 +470,11 @@ class SessionQueryEngine:
                 raise
 
         auto_continue_count = 0
-        while not got_result and auto_continue_count < max_auto_continues:
+        while (
+            not got_result
+            and auto_continue_count < max_auto_continues
+            and self._should_auto_continue(session)
+        ):
             if command.session_id in self._cancelled_sessions:
                 break
             if not self._claude_agent_gateway.is_connected(command.session_id):

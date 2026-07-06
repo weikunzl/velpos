@@ -152,6 +152,15 @@ class TestRoutingAgentGateway(unittest.IsolatedAsyncioTestCase):
         claude_backend = gateway.backends["claude"]
         self.assertEqual([("s1", "/tmp/project", "sdk-1")], claude_backend.deleted_session_files)
 
+    async def test_get_models_for_provider_routes_to_backend(self) -> None:
+        gateway = self._gateway()
+
+        claude_models = await gateway.get_models_for_provider("claude")
+        cursor_models = await gateway.get_models_for_provider("cursor")
+
+        self.assertEqual([{"value": "claude", "displayName": "claude"}], claude_models)
+        self.assertEqual([{"value": "cursor", "displayName": "cursor"}], cursor_models)
+
 
 if __name__ == "__main__":
     unittest.main()

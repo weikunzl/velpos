@@ -71,12 +71,56 @@ class TestAcpMessageMapper(unittest.TestCase):
         self.assertEqual("created", message["content"]["subtype"])
         self.assertEqual("term-1", message["content"]["terminal_id"])
 
-    def test_unknown_update_becomes_safe_system_diagnostic(self) -> None:
+    def test_unknown_update_is_ignored(self) -> None:
         message = map_acp_update({"type": "future_extension", "value": 42})
 
-        self.assertEqual("system", message["message_type"])
-        self.assertEqual("acp_unknown_update", message["content"]["subtype"])
-        self.assertEqual("future_extension", message["content"]["raw_type"])
+        self.assertIsNone(message)
+
+    def test_agent_thought_chunk_is_ignored(self) -> None:
+        message = map_acp_update(
+            {
+                "sessionId": "s1",
+                "update": {
+                    "sessionUpdate": "agent_thought_chunk",
+                    "content": {"type": "text", "text": "thinking"},
+                },
+            }
+        )
+
+        self.assertIsNone(message)
+
+    def test_tool_call_update_is_ignored(self) -> None:
+        message = map_acp_update(
+            {
+                "update": {
+                    "sessionUpdate": "tool_call_update",
+                    "toolCallId": "tool-1",
+                    "status": "in_progress",
+                }
+            }
+        )
+
+        self.assertIsNone(message)
+
+    def test_maps_acp_tool_call_with_kind_field(self) -> None:
+        """Tool-call payloads carry ``kind`` (execute/read/...) — not the update type."""
+        message = map_acp_update(
+            {
+                "update": {
+                    "sessionUpdate": "tool_call",
+                    "toolCallId": "tool-1",
+                    "title": "Shell",
+                    "kind": "execute",
+                    "rawInput": {"command": "ls"},
+                }
+            }
+        )
+
+        self.assertEqual("assistant", message["message_type"])
+        block = message["content"]["blocks"][0]
+        self.assertEqual("tool-1", block["id"])
+        self.assertEqual("Shell", block["name"])
+        self.assertEqual({"command": "ls"}, block["input"])
 
     def test_malformed_update_raises_clear_error(self) -> None:
         with self.assertRaisesRegex(ValueError, "ACP update must be an object"):

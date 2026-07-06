@@ -115,8 +115,9 @@ async def list_sessions(
 @router.get("/meta/models", summary="List available models")
 async def list_models(
     service: ServiceDep,
+    provider: str = Query(default="", max_length=32),
 ) -> ApiResponse[list]:
-    models = await service.get_models()
+    models = await service.get_models(provider=provider or None)
     return ApiResponse.success(models)
 
 
