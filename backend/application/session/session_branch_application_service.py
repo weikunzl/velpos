@@ -72,6 +72,7 @@ class SessionBranchApplicationService:
             raise BusinessException("Branch count must be between 1 and 8")
         if source.messages:
             messages = self._messages_until(source, message_index)
+            messages = self._strip_thinking_blocks(messages)
         elif source.sdk_session_id:
             messages = []
         else:
@@ -95,7 +96,7 @@ class SessionBranchApplicationService:
             )
             branch_session = Session.reconstitute(
                 session_id=seed.session_id,
-                model=source.model,
+                model=branch_model,
                 status=SessionStatus.IDLE,
                 messages=messages,
                 usage=Usage.zero(),
@@ -496,6 +497,33 @@ class SessionBranchApplicationService:
         if message_index >= len(messages):
             raise BusinessException("Message index out of range")
         return messages[:message_index + 1]
+
+    @staticmethod
+    def _strip_thinking_blocks(messages: list[Message]) -> list[Message]:
+        """Strip thinking/redacted_thinking blocks from messages.
+
+        Messages whose content contains ONLY thinking blocks are removed.
+        Messages with mixed blocks keep only non-thinking blocks.
+        """
+        THINKING_TYPES = {"thinking", "redacted_thinking"}
+        cleaned: list[Message] = []
+        for msg in messages:
+            content = msg.content
+            if not isinstance(content, dict) or "blocks" not in content:
+                cleaned.append(msg)
+                continue
+            blocks = content["blocks"]
+            new_blocks = [b for b in blocks if b.get("type") not in THINKING_TYPES]
+            if not new_blocks:
+                continue
+            if len(new_blocks) != len(blocks):
+                cleaned.append(Message(
+                    message_type=msg.message_type,
+                    content=dict(content, blocks=new_blocks),
+                ))
+            else:
+                cleaned.append(msg)
+        return cleaned
 
     @staticmethod
     def _message_to_dict(message: Message) -> dict[str, Any]:
