@@ -1,0 +1,9 @@
+providers:
+  cursor:
+    transport: stdio
+    command: agent
+    args: [acp]
+    auth_method: cursor_login
+    default_model: auto
+    env:
+      CURSOR_API_KEY: ${CURSOR_API_KEY}

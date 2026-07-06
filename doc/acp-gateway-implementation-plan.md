@@ -126,7 +126,7 @@ git commit -m "feat(acp): 增加 AgentGateway 路由网关"
 - Create: `backend/tests/unit/test_acp_provider_config.py`
 - Modify: `backend/pyproject.toml`
 
-- [ ] **Step 1: Write failing provider config tests**
+- [x] **Step 1: Write failing provider config tests**
 
 Cover:
 - load `cursor` provider with `transport=stdio`, `command=agent`, `args=["acp"]`
@@ -134,7 +134,7 @@ Cover:
 - unsupported transport raises clear error
 - missing command for stdio raises clear error
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 cd backend
@@ -143,17 +143,18 @@ uv run python -m unittest tests.unit.test_acp_provider_config -v
 
 Expected: import failure for provider config module.
 
-- [ ] **Step 3: Add dependency and implementation**
+- [x] **Step 3: Add dependency and implementation**
 
 Add:
 
 ```toml
-"agent-client-protocol>=0.10.1",
+"agent-client-protocol>=0.11.0",
+"pyyaml>=6.0.3",
 ```
 
 Implement a small config loader using Pydantic or standard dataclasses. Keep it independent from FastAPI and database state.
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 ```bash
 cd backend
@@ -161,7 +162,7 @@ uv run python -m unittest tests.unit.test_acp_provider_config -v
 uv run python -m py_compile infr/client/acp/provider.py
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/pyproject.toml backend/uv.lock backend/infr/client/acp/provider.py backend/infr/config/agent_providers.yaml backend/tests/unit/test_acp_provider_config.py doc/acp-gateway-implementation-plan.md
