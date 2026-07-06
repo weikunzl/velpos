@@ -8,12 +8,29 @@ import inspect
 from typing import Any, AsyncIterator, Callable
 
 from domain.session.acl.agent_gateway import AgentCapability, AgentGateway, NormalizedMessage
+from infr.client.acp.client_handlers import AcpClientHandlers
 from infr.client.acp.message_mapper import map_acp_update
 from infr.client.acp.provider import AgentProviderConfig
 from infr.client.acp.transport import AcpTransport, StdioTransport
 
 
 TransportFactory = Callable[[AgentProviderConfig], AcpTransport]
+
+_CLIENT_REQUEST_METHODS = {
+    "fs/read_text_file",
+    "fs/write_text_file",
+    "terminal/create",
+    "terminal/output",
+    "terminal/wait_for_exit",
+    "terminal/kill",
+    "terminal/release",
+    "session/request_permission",
+    "cursor/ask_question",
+}
+
+
+class AcpPromptCancelled(Exception):
+    """Raised when a prompt loop exits due to session/cancel."""
 
 
 @dataclass
@@ -22,6 +39,7 @@ class _AcpConnection:
     session_id: str
     acp_session_id: str
     model: str
+    cwd: str
 
 
 class AcpGateway(AgentGateway):
@@ -37,16 +55,19 @@ class AcpGateway(AgentGateway):
         self,
         provider: AgentProviderConfig,
         transport_factory: TransportFactory | None = None,
+        client_handlers: AcpClientHandlers | None = None,
         user_response_timeout: float = 3600.0,
     ) -> None:
         self.provider = provider
         self._transport_factory = transport_factory or self._default_transport_factory
+        self._client_handlers = client_handlers or AcpClientHandlers()
         self._user_response_timeout = user_response_timeout
         self._connections: dict[str, _AcpConnection] = {}
         self._states: dict[str, str] = {}
         self._active_sessions: set[str] = set()
         self._pending_user_responses: dict[str, asyncio.Future[dict[str, Any]]] = {}
         self._pending_request_context: dict[str, dict[str, Any]] = {}
+        self._cancel_events: dict[str, asyncio.Event] = {}
         self._broadcast_fn: Callable[[str, dict[str, Any]], Any] | None = None
         self._lock = asyncio.Lock()
         self._request_id = 0
@@ -101,14 +122,20 @@ class AcpGateway(AgentGateway):
         self._states[session_id] = "connected"
 
     async def interrupt(self, session_id: str) -> None:
-        """Mark the session interrupted.
-
-        ACP cancellation is handled in a later task; this keeps the current
-        AgentGateway contract usable without pretending a provider capability
-        that has not been verified against Cursor.
-        """
-        if session_id not in self._connections:
+        """Send ACP session/cancel and stop the active prompt loop."""
+        connection = self._connections.get(session_id)
+        if connection is None:
             raise RuntimeError(f"No active ACP connection for session {session_id}")
+
+        cancel_event = self._cancel_events.setdefault(session_id, asyncio.Event())
+        cancel_event.set()
+        await connection.transport.send_json(
+            {
+                "jsonrpc": "2.0",
+                "method": "session/cancel",
+                "params": {"sessionId": connection.acp_session_id},
+            }
+        )
         self._states[session_id] = "interrupted"
 
     async def disconnect(self, session_id: str) -> None:
@@ -118,6 +145,7 @@ class AcpGateway(AgentGateway):
             await connection.transport.close()
         self._states[session_id] = "idle"
         self._active_sessions.discard(session_id)
+        self._cancel_events.pop(session_id, None)
         await self._cancel_pending_response(session_id)
 
     async def cleanup_session(self, session_id: str) -> None:
@@ -203,10 +231,7 @@ class AcpGateway(AgentGateway):
                 {
                     "protocolVersion": 1,
                     "clientInfo": {"name": "velpos", "version": "0.2.0"},
-                    "clientCapabilities": {
-                        "fs": {"readTextFile": False, "writeTextFile": False},
-                        "terminal": False,
-                    },
+                    "clientCapabilities": self._client_capabilities(),
                 },
             )
             if self.provider.auth_method:
@@ -236,6 +261,7 @@ class AcpGateway(AgentGateway):
             session_id=session_id,
             acp_session_id=acp_session_id,
             model=model,
+            cwd=cwd or "",
         )
         self._connections[session_id] = connection
         self._states[session_id] = "connected"
@@ -247,6 +273,8 @@ class AcpGateway(AgentGateway):
         prompt: str,
     ) -> AsyncIterator[NormalizedMessage]:
         request_id = self._next_request_id()
+        cancel_event = self._cancel_events.setdefault(connection.session_id, asyncio.Event())
+        cancel_event.clear()
         await connection.transport.send_json(
             {
                 "jsonrpc": "2.0",
@@ -259,19 +287,22 @@ class AcpGateway(AgentGateway):
             }
         )
 
-        while True:
-            message = await connection.transport.receive_json()
-            method = message.get("method")
-            if method in {"session/request_permission", "cursor/ask_question"}:
-                await self._handle_agent_request(connection, message)
-                continue
-            if message.get("method") == "session/update":
-                params = message.get("params") or {}
-                yield map_acp_update(params)
-                continue
-            if message.get("id") == request_id:
-                self._raise_if_error("session/prompt", message)
-                return
+        try:
+            while True:
+                message = await self._receive_message(connection, cancel_event)
+                if await self._maybe_handle_inbound(connection, message):
+                    continue
+                if message.get("method") == "session/update":
+                    params = message.get("params") or {}
+                    yield map_acp_update(params)
+                    continue
+                if message.get("id") == request_id:
+                    self._raise_if_error("session/prompt", message)
+                    return
+        except AcpPromptCancelled:
+            return
+        finally:
+            cancel_event.clear()
 
     async def _send_request(
         self,
@@ -289,12 +320,126 @@ class AcpGateway(AgentGateway):
             }
         )
         while True:
-            response = await transport.receive_json()
+            response = await self._receive_message(transport)
             if response.get("id") != request_id:
                 continue
             self._raise_if_error(method, response)
             result = response.get("result") or {}
             return result if isinstance(result, dict) else {"value": result}
+
+    def _client_capabilities(self) -> dict[str, Any]:
+        return {
+            "fs": {"readTextFile": True, "writeTextFile": True},
+            "terminal": True,
+        }
+
+    async def _receive_message(
+        self,
+        target: AcpTransport | _AcpConnection,
+        cancel_event: asyncio.Event | None = None,
+    ) -> dict[str, Any]:
+        transport = target.transport if isinstance(target, _AcpConnection) else target
+        while True:
+            if cancel_event is not None and cancel_event.is_set():
+                raise AcpPromptCancelled()
+            try:
+                return await asyncio.wait_for(transport.receive_json(), timeout=0.5)
+            except asyncio.TimeoutError:
+                continue
+
+    async def _maybe_handle_inbound(
+        self,
+        connection: _AcpConnection,
+        message: dict[str, Any],
+    ) -> bool:
+        method = message.get("method")
+        if method not in _CLIENT_REQUEST_METHODS:
+            return False
+        if message.get("id") is None:
+            return False
+
+        if method in {"session/request_permission", "cursor/ask_question"}:
+            await self._handle_agent_request(connection, message)
+            return True
+
+        result: dict[str, Any]
+        try:
+            result = await self._handle_client_capability_request(connection, method, message.get("params") or {})
+        except Exception as exc:
+            await connection.transport.send_json(
+                {
+                    "jsonrpc": "2.0",
+                    "id": message.get("id"),
+                    "error": {"code": -32000, "message": str(exc)},
+                }
+            )
+            return True
+
+        await connection.transport.send_json(
+            {
+                "jsonrpc": "2.0",
+                "id": message.get("id"),
+                "result": result,
+            }
+        )
+        return True
+
+    async def _handle_client_capability_request(
+        self,
+        connection: _AcpConnection,
+        method: str,
+        params: dict[str, Any],
+    ) -> dict[str, Any]:
+        handlers = self._client_handlers
+        cwd = connection.cwd
+
+        if method == "fs/read_text_file":
+            content = await handlers.read_text_file(
+                cwd=cwd,
+                path=str(params.get("path") or ""),
+                line=params.get("line"),
+                limit=params.get("limit"),
+            )
+            return {"content": content}
+
+        if method == "fs/write_text_file":
+            await handlers.write_text_file(
+                cwd=cwd,
+                path=str(params.get("path") or ""),
+                content=str(params.get("content") or ""),
+            )
+            return {}
+
+        if method == "terminal/create":
+            terminal_id = await handlers.create_terminal(
+                cwd=cwd,
+                command=str(params.get("command") or ""),
+                args=params.get("args"),
+                env=params.get("env"),
+                terminal_cwd=params.get("cwd"),
+                output_byte_limit=params.get("outputByteLimit"),
+            )
+            return {"terminalId": terminal_id}
+
+        if method == "terminal/output":
+            return await handlers.terminal_output(str(params.get("terminalId") or ""))
+
+        if method == "terminal/wait_for_exit":
+            result = await handlers.wait_for_terminal_exit(str(params.get("terminalId") or ""))
+            return {
+                "exitCode": result.get("exitCode"),
+                "signal": result.get("signal"),
+            }
+
+        if method == "terminal/kill":
+            await handlers.kill_terminal(str(params.get("terminalId") or ""))
+            return {}
+
+        if method == "terminal/release":
+            await handlers.release_terminal(str(params.get("terminalId") or ""))
+            return {}
+
+        raise RuntimeError(f"Unhandled ACP client request: {method}")
 
     def _next_request_id(self) -> int:
         self._request_id += 1

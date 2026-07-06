@@ -46,12 +46,13 @@ Vue 前端 → Velpos FastAPI + WS → RoutingAgentGateway → claude: ClaudeAge
 cd backend
 uv run python -m unittest discover -s tests/unit -p 'test_*.py' -v
 VELPOS_RUN_CURSOR_ACP_TEST=1 uv run python -m unittest tests.integration.test_cursor_acp_smoke -v
+VELPOS_RUN_CURSOR_ACP_E2E=1 uv run python -m unittest tests.integration.test_cursor_acp_e2e -v
 
 【待办优先级】
-1. 部署环境 alembic upgrade head（0026_session_provider）
-2. 端到端：前端选 Cursor → 发消息 → WS 收到 assistant 回复
-3. Phase 3：fs/*、terminal/* 代理；session/cancel 真实现
-4. initialize 能力位与 Cursor 实测对齐
+1. ~~部署环境 alembic upgrade head（0026_session_provider）~~ ✅ 2026-07-06 已执行
+2. ~~端到端：前端选 Cursor → 发消息 → WS 收到 assistant 回复~~ ✅ opt-in E2E 测试 PASS
+3. ~~Phase 3：fs/*、terminal/* 代理；session/cancel 真实现~~ ✅ 已实现 + 单元测试
+4. initialize 能力位与 Cursor 实测对齐（目前偏保守 false → 已改为 true）
 
 【协作方式】需求/开发/测试三角色；每步小步提交（中文 commit）；行为变更加单元测试。
 ```
@@ -103,6 +104,7 @@ build/dev/start.sh start
 | 通用端口 | `backend/domain/session/acl/agent_gateway.py` |
 | 路由网关 | `backend/infr/client/routing_agent_gateway.py` |
 | ACP 网关 | `backend/infr/client/acp/acp_gateway.py` |
+| Client 能力代理 | `backend/infr/client/acp/client_handlers.py` |
 | stdio 传输 | `backend/infr/client/acp/transport.py` |
 | 消息映射 | `backend/infr/client/acp/message_mapper.py` |
 | Provider 配置 | `backend/infr/config/agent_providers.yaml` |
@@ -114,6 +116,7 @@ build/dev/start.sh start
 | 前端 API | `frontend/src/entities/session/api/sessionApi.js` |
 | 创建对话框 | `frontend/src/features/session-list/ui/CreateSessionDialog.vue` |
 | 冒烟测试 | `backend/tests/integration/test_cursor_acp_smoke.py` |
+| E2E 测试 | `backend/tests/integration/test_cursor_acp_e2e.py` |
 
 ---
 
@@ -136,7 +139,7 @@ a7fb37e docs(workflow): 记录三角色协作与小步提交规则
 e62cae9 feat(acp): 增加通用 AgentGateway 接缝
 ```
 
-**测试状态（2026-07-06）**：单元测试 47 passed；opt-in 冒烟 PASS（需本机 `agent` 已 login）。
+**测试状态（2026-07-06）**：单元测试 53 passed；opt-in 冒烟 PASS；opt-in E2E PASS（需本机 `agent` 已 login + 后端 :8083）。
 
 ---
 
@@ -144,16 +147,16 @@ e62cae9 feat(acp): 增加通用 AgentGateway 接缝
 
 ### P0 — 上线前
 
-- [ ] 目标环境执行 `alembic upgrade head`（`0026_session_provider`）
-- [ ] 端到端手动验证：`provider=cursor` 会话发消息 → WebSocket 流式回复
+- [x] 目标环境执行 `alembic upgrade head`（`0026_session_provider`）
+- [x] 端到端验证：`provider=cursor` 会话发消息 → WebSocket 流式回复（`test_cursor_acp_e2e.py`）
 - [ ] 确认服务端 `agent` 在 PATH 且已 `agent login`（或配置 `CURSOR_API_KEY`）
 
 ### P1 — Phase 3 能力
 
-- [ ] `session/cancel` 真实现（当前 interrupt 可能仅改本地状态）
-- [ ] ACP `fs/*` 代理到 Velpos workspace / 浏览器文件面板
-- [ ] ACP `terminal/*` 代理到 xterm 抽屉
-- [ ] `initialize` clientCapabilities 与 Cursor 实测对齐（目前偏保守 false）
+- [x] `session/cancel` 真实现（发送 ACP notification + 中断 prompt 循环）
+- [x] ACP `fs/*` 代理到 workspace 目录（服务端本地读写）
+- [x] ACP `terminal/*` 代理到 subprocess 终端会话
+- [ ] `initialize` clientCapabilities 与 Cursor 更多扩展方法实测对齐
 
 ### P2 — 增强
 
@@ -219,4 +222,5 @@ which agent && agent --version
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-06 | Phase 3：session/cancel、fs/terminal 代理、E2E 测试、迁移执行 |
 | 2026-07-06 | 初版：Tasks 1–9 完成后的切换/续作归档 |
