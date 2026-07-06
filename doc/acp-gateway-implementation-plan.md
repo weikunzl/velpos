@@ -491,3 +491,5 @@ git commit -m "test(acp): 增加 Cursor ACP 冒烟验证"
 - Placeholder scan: no TBD/TODO placeholders; each task has exact files and commands.
 - Type consistency: `AgentGateway`, `AgentCapability`, `NormalizedMessage`, `RoutingAgentGateway`, `AcpGateway`, and `StdioTransport` names are consistent across tasks.
 - Scope: AG-UI and multi-user account isolation are explicitly non-goals for this plan.
+
+**Handoff:** For switching workspaces or resuming in a new agent session, see `doc/acp-handoff.md`.

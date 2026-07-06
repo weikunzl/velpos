@@ -147,7 +147,9 @@ frontend/src/
 
 ## Related Documentation
 
+- [ACP 集成续作指南](doc/acp-handoff.md) — 切换回 Velpos 时的 Agent 提示语、架构快照、backlog
 - [ACP / Cursor Agent 集成调研](doc/acp-integration-research.md) — AcpGateway 设计、开发、测试参考（含 Zed 实现对照、事件映射、测试计划）
+- [AcpGateway 实施计划](doc/acp-gateway-implementation-plan.md) — Task 1–9 路线图与验收
 - [部署指南](doc/deploy-guide.md)
 
 ## Git Commit Workflow

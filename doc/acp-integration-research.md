@@ -658,6 +658,7 @@ _agent_gateway = RoutingAgentGateway(
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-06 | 新增 §17 变更记录；新增 `doc/acp-handoff.md` 项目切换与续作指南 |
 | 2026-07-06 | 初版：汇总 Auto 模型、AG-UI、Cursor Gateway、AcpGateway、Zed 参考调研 |
 | 2026-07-06 | 新增 §14 架构选型决策（热度调研、命名陷阱、批判对比、结论矩阵）；风险登记补充 R7/R8 |
 | 2026-07-06 | 新增 §15 目标与约束确认（远程集中式、离线不要求、单账号、transport 可插拔预留、自研 Agent 最小要求） |
