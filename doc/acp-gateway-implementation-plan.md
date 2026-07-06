@@ -227,7 +227,7 @@ git commit -m "feat(acp): 增加 stdio 传输层"
 - Create: `backend/infr/client/acp/message_mapper.py`
 - Create: `backend/tests/unit/test_acp_message_mapper.py`
 
-- [ ] **Step 1: Write mapper tests**
+- [x] **Step 1: Write mapper tests**
 
 Cover:
 - happy path: text delta/update becomes `{"message_type": "assistant", "content": {"blocks": [{"type": "text", "text": "..."}]}}`
@@ -236,18 +236,18 @@ Cover:
 - unknown update becomes safe `system` diagnostic or `None` according to chosen behavior
 - malformed payload raises a mapper-specific `ValueError` with provider/update context
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 cd backend
 uv run python -m unittest tests.unit.test_acp_message_mapper -v
 ```
 
-- [ ] **Step 3: Implement mapper**
+- [x] **Step 3: Implement mapper**
 
 Use `agent-client-protocol` schema models when practical. If Cursor emits extension fields, parse conservatively and preserve raw subtype in `content`.
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 ```bash
 cd backend
@@ -255,7 +255,7 @@ uv run python -m unittest tests.unit.test_acp_message_mapper -v
 uv run python -m py_compile infr/client/acp/message_mapper.py
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/infr/client/acp/message_mapper.py backend/tests/unit/test_acp_message_mapper.py doc/acp-gateway-implementation-plan.md
