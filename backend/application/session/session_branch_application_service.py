@@ -13,6 +13,7 @@ from application.git_helpers import get_current_git_branch, run_git
 
 from domain.session.model.message import Message
 from domain.session.model.session import Session
+from domain.channel_profile.repository.channel_profile_repository import ChannelProfileRepository
 from domain.session.model.session_branch import SessionBranch
 from domain.session.model.session_snapshot import SessionSnapshot
 from domain.session.model.session_status import SessionStatus
@@ -41,6 +42,7 @@ class SessionBranchApplicationService:
         session_repository: SessionRepository,
         branch_repository: SessionBranchRepository,
         snapshot_repository: SessionSnapshotRepository,
+        channel_profile_repository: ChannelProfileRepository | None = None,
         delete_session_fn: Callable[[str], Awaitable[bool]] | None = None,
         session_service_factory: Callable[[], Awaitable[Any]] | None = None,
         connection_manager: Any = None,
@@ -49,6 +51,7 @@ class SessionBranchApplicationService:
         self._session_repository = session_repository
         self._branch_repository = branch_repository
         self._snapshot_repository = snapshot_repository
+        self._channel_profile_repository = channel_profile_repository
         self._delete_session_fn = delete_session_fn
         self._session_service_factory = session_service_factory
         self._connection_manager = connection_manager
@@ -80,8 +83,9 @@ class SessionBranchApplicationService:
         branches: list[SessionBranch] = []
         sessions: list[Session] = []
         source_fork_marker = self._fork_marker(source.sdk_session_id)
+        branch_model = await self._resolve_branch_model(source.model)
         for sequence_no in range(1, branch_count + 1):
-            seed = Session.create(model=source.model, project_id=source.project_id, project_dir=source.project_dir)
+            seed = Session.create(model=branch_model, project_id=source.project_id, project_dir=source.project_dir)
             branch_name = f"{base_name}-{sequence_no}"
             project_dir, actual_worktree_path = await self._create_worktree(
                 source.project_dir,
@@ -465,6 +469,24 @@ class SessionBranchApplicationService:
         if sdk_session_id.startswith("fork:"):
             return sdk_session_id
         return f"fork:{sdk_session_id}"
+
+    async def _resolve_branch_model(self, fallback_model: str) -> str:
+        """Resolve the model for a branch session.
+
+        Looks up the active channel profile's ANTHROPIC_MODEL first.
+        Falls back to the source session's model if no active profile
+        or no model config is found.
+        """
+        if self._channel_profile_repository is not None:
+            try:
+                active = await self._channel_profile_repository.find_active()
+                if active is not None:
+                    model = active.model_config.get("ANTHROPIC_MODEL", "")
+                    if model:
+                        return model
+            except Exception:
+                logger.warning("Failed to resolve active channel model, using fallback", exc_info=True)
+        return fallback_model
 
     @staticmethod
     def _messages_until(session: Session, message_index: int) -> list[Message]:

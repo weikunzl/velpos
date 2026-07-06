@@ -206,6 +206,7 @@ async def get_session_branch_application_service(
         session_repository=SessionRepositoryImpl(db_session),
         branch_repository=SessionBranchRepositoryImpl(db_session),
         snapshot_repository=SessionSnapshotRepositoryImpl(db_session),
+        channel_profile_repository=ChannelProfileRepositoryImpl(db_session),
         delete_session_fn=_delete_session_for_branch,
         session_service_factory=_create_session_service,
         connection_manager=_connection_manager,

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import traceback
 import uuid
 
 from collections.abc import Awaitable, Callable
@@ -623,23 +624,32 @@ class SessionQueryEngine:
                 trace_id=session.trace_id,
             )
 
-        await self._recorder.fail_run_step(run_step, {"error": str(e)[:500]})
+        import traceback
+
+        error_detail = str(e)
+        error_traceback = traceback.format_exc()
+
+        await self._recorder.fail_run_step(run_step, {"error": error_detail[:500]})
         await self._recorder.record_audit_event(
             command.session_id,
             "query_failed",
-            payload={"run_id": run_id, "error": str(e)[:500]},
+            payload={"run_id": run_id, "error": error_detail[:500]},
         )
         await self._recorder.record_timeline_event(
             command.session_id,
             run_id,
             "error",
             "执行失败",
-            {"error": str(e)[:1000]},
+            {"error": error_detail[:1000]},
             status="failed",
         )
         await self._connection_manager.broadcast(
             session.session_id,
-            {"event": "error", "message": str(e)},
+            {
+                "event": "error",
+                "message": error_detail,
+                "traceback": error_traceback,
+            },
         )
 
     # ------------------------------------------------------------------
