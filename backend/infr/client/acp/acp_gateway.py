@@ -66,6 +66,7 @@ class AcpGateway(AgentGateway):
         mcp_servers: dict | None = None,
         max_turns: int | None = None,
         max_budget_usd: float | None = None,
+        **_ignored_kwargs: Any,
     ) -> AsyncIterator[NormalizedMessage]:
         """Open an ACP connection, create a session, and send the first prompt."""
         connection = await self._open_acp_connection(
@@ -208,6 +209,12 @@ class AcpGateway(AgentGateway):
                     },
                 },
             )
+            if self.provider.auth_method:
+                await self._send_request(
+                    transport,
+                    "authenticate",
+                    {"methodId": self.provider.auth_method},
+                )
             result = await self._send_request(
                 transport,
                 "session/new",

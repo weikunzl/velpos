@@ -458,6 +458,16 @@ git commit -m "test(acp): 增加 Cursor ACP 冒烟验证"
 
 ---
 
+## Post-Review Fixes
+
+- [x] `RoutingAgentGateway.connect()` accepts and forwards legacy Claude kwargs such as `enable_file_checkpointing`.
+- [x] `RoutingAgentGateway.delete_session_files()` accepts existing `sdk_session_id` callers.
+- [x] `RoutingAgentGateway.provider_names()` exposes configured providers for create-session validation.
+- [x] `SessionApplicationService` rejects unsupported providers before persisting a session.
+- [x] `AcpGateway` sends `authenticate` when provider config declares `auth_method`.
+
+---
+
 ## Self-Review
 
 - Spec coverage: §15 remote personal use and §16 B1-B8 are covered by Tasks 1-8.

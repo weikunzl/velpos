@@ -305,6 +305,7 @@ class SessionApplicationService:
     # ── Session CRUD ─────────────────────────────────────────
 
     async def create_session(self, command: CreateSessionCommand) -> Session:
+        self._validate_agent_provider(command.provider)
         project_dir = command.project_dir
 
         if not project_dir and command.project_id and self._project_repository:
@@ -435,6 +436,15 @@ class SessionApplicationService:
         session.rename(name)
         await self._save_session(session, commit=True)
         return session
+
+    def _validate_agent_provider(self, provider: str) -> None:
+        """Validate provider early when the gateway exposes configured names."""
+        provider_names = getattr(self._claude_agent_gateway, "provider_names", None)
+        if not callable(provider_names):
+            return
+        allowed = provider_names()
+        if provider not in allowed:
+            raise BusinessException(f"Unsupported agent provider: {provider}")
 
     # ── Context management ───────────────────────────────────
 

@@ -68,6 +68,10 @@ class RoutingAgentGateway(AgentGateway):
         """Return the provider for a session, falling back to default."""
         return self._session_providers.get(session_id, self.default_provider)
 
+    def provider_names(self) -> list[str]:
+        """Return registered provider names for request validation."""
+        return sorted(self.backends)
+
     def capabilities(self) -> set[AgentCapability]:
         """Return capabilities for the default backend."""
         return self.backends[self.default_provider].capabilities()
@@ -100,6 +104,7 @@ class RoutingAgentGateway(AgentGateway):
         mcp_servers: dict | None = None,
         max_turns: int | None = None,
         max_budget_usd: float | None = None,
+        **kwargs: Any,
     ) -> AsyncIterator[NormalizedMessage]:
         async for message in self._backend_for(session_id).connect(
             session_id=session_id,
@@ -111,6 +116,7 @@ class RoutingAgentGateway(AgentGateway):
             mcp_servers=mcp_servers,
             max_turns=max_turns,
             max_budget_usd=max_budget_usd,
+            **kwargs,
         ):
             yield message
 
@@ -216,8 +222,18 @@ class RoutingAgentGateway(AgentGateway):
     async def get_context_usage(self, session_id: str) -> dict[str, Any] | None:
         return await self._backend_for(session_id).get_context_usage(session_id)
 
-    def delete_session_files(self, session_id: str, project_dir: str) -> None:
-        self._backend_for(session_id).delete_session_files(session_id, project_dir)
+    def delete_session_files(
+        self,
+        session_id: str,
+        project_dir: str,
+        sdk_session_id: str | None = None,
+    ) -> None:
+        backend = self._backend_for(session_id)
+        method = getattr(backend, "delete_session_files")
+        try:
+            method(session_id, project_dir, sdk_session_id=sdk_session_id)
+        except TypeError:
+            method(session_id, project_dir)
 
     def get_cached_sdk_session_id(self, session_id: str) -> str | None:
         backend = self._backend_for(session_id)

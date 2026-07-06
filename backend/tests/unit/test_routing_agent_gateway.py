@@ -14,8 +14,10 @@ class FakeGateway(AgentGateway):
         self.name = name
         self._capabilities = capabilities or set()
         self.connected: set[str] = set()
+        self.connect_kwargs: dict[str, Any] = {}
         self.interrupted: list[str] = []
         self.disconnected: list[str] = []
+        self.deleted_session_files: list[tuple[str, str, str | None]] = []
 
     def capabilities(self) -> set[AgentCapability]:
         return set(self._capabilities)
@@ -31,8 +33,10 @@ class FakeGateway(AgentGateway):
         mcp_servers: dict | None = None,
         max_turns: int | None = None,
         max_budget_usd: float | None = None,
+        **kwargs: Any,
     ) -> AsyncIterator[NormalizedMessage]:
         self.connected.add(session_id)
+        self.connect_kwargs = kwargs
         yield {"message_type": "_meta", "content": {"provider": self.name}}
 
     async def open_connection(
@@ -66,6 +70,14 @@ class FakeGateway(AgentGateway):
     def is_connected(self, session_id: str) -> bool:
         return session_id in self.connected
 
+    def delete_session_files(
+        self,
+        session_id: str,
+        project_dir: str,
+        sdk_session_id: str | None = None,
+    ) -> None:
+        self.deleted_session_files.append((session_id, project_dir, sdk_session_id))
+
 
 class TestRoutingAgentGateway(unittest.IsolatedAsyncioTestCase):
     def _gateway(self) -> RoutingAgentGateway:
@@ -98,6 +110,11 @@ class TestRoutingAgentGateway(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(ValueError, "Unknown agent provider: missing"):
             gateway.bind_session_provider("s1", "missing")
 
+    def test_provider_names_are_available_for_validation(self) -> None:
+        gateway = self._gateway()
+
+        self.assertEqual(["claude", "cursor"], gateway.provider_names())
+
     async def test_routes_async_operations_to_bound_backend(self) -> None:
         gateway = self._gateway()
         gateway.bind_session_provider("s1", "cursor")
@@ -110,6 +127,30 @@ class TestRoutingAgentGateway(unittest.IsolatedAsyncioTestCase):
         cursor_backend = gateway.backends["cursor"]
         self.assertEqual(["s1"], cursor_backend.interrupted)
         self.assertEqual(["s1"], cursor_backend.disconnected)
+
+    async def test_forwards_legacy_connect_kwargs_to_backend(self) -> None:
+        gateway = self._gateway()
+
+        _ = [
+            msg
+            async for msg in gateway.connect(
+                "s1",
+                "auto",
+                "hello",
+                enable_file_checkpointing=True,
+            )
+        ]
+
+        claude_backend = gateway.backends["claude"]
+        self.assertEqual({"enable_file_checkpointing": True}, claude_backend.connect_kwargs)
+
+    def test_delete_session_files_accepts_sdk_session_id(self) -> None:
+        gateway = self._gateway()
+
+        gateway.delete_session_files("s1", "/tmp/project", sdk_session_id="sdk-1")
+
+        claude_backend = gateway.backends["claude"]
+        self.assertEqual([("s1", "/tmp/project", "sdk-1")], claude_backend.deleted_session_files)
 
 
 if __name__ == "__main__":

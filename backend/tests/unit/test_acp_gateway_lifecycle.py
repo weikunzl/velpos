@@ -63,6 +63,52 @@ class TestAcpGatewayLifecycle(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("/tmp/project", transport.sent[1]["params"]["cwd"])
         self.assertEqual("acp-session-1", transport.sent[2]["params"]["sessionId"])
 
+    async def test_connect_accepts_legacy_claude_kwargs_without_forwarding_them(self) -> None:
+        transport = FakeTransport(
+            [
+                {"jsonrpc": "2.0", "id": 1, "result": {}},
+                {"jsonrpc": "2.0", "id": 2, "result": {"sessionId": "acp-session-1"}},
+                {"jsonrpc": "2.0", "id": 3, "result": {}},
+            ]
+        )
+        gateway = AcpGateway(self._provider(), transport_factory=lambda _provider: transport)
+
+        _ = [
+            message
+            async for message in gateway.connect(
+                "velpos-1",
+                "auto",
+                "hi",
+                enable_file_checkpointing=True,
+            )
+        ]
+
+        self.assertEqual(["initialize", "session/new", "session/prompt"], [item["method"] for item in transport.sent])
+
+    async def test_auth_method_sends_authenticate_before_session_new(self) -> None:
+        provider = AgentProviderConfig(
+            name="cursor",
+            transport="stdio",
+            command="agent",
+            args=["acp"],
+            auth_method="cursor_login",
+            default_model="auto",
+        )
+        transport = FakeTransport(
+            [
+                {"jsonrpc": "2.0", "id": 1, "result": {}},
+                {"jsonrpc": "2.0", "id": 2, "result": {}},
+                {"jsonrpc": "2.0", "id": 3, "result": {"sessionId": "acp-session-1"}},
+                {"jsonrpc": "2.0", "id": 4, "result": {}},
+            ]
+        )
+        gateway = AcpGateway(provider, transport_factory=lambda _provider: transport)
+
+        _ = [message async for message in gateway.connect("velpos-1", "auto", "hi")]
+
+        self.assertEqual(["initialize", "authenticate", "session/new", "session/prompt"], [item["method"] for item in transport.sent])
+        self.assertEqual({"methodId": "cursor_login"}, transport.sent[1]["params"])
+
     async def test_send_query_reuses_existing_connection(self) -> None:
         transport = FakeTransport(
             [
