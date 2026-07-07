@@ -11,14 +11,13 @@ const props = defineProps({
   waitingForSlot: { type: Boolean, default: false },
   cancelRequested: { type: Boolean, default: false },
   interactiveBlock: { type: Object, default: null },
+  interactiveAnswered: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['interactive-response'])
 
-const interactiveAnswered = ref(false)
-
 watch(() => props.interactiveBlock, () => {
-  interactiveAnswered.value = false
+  // Parent owns answered state; reset happens when a new interactive block arrives.
 })
 
 const visible = computed(() => Boolean(
@@ -27,7 +26,7 @@ const visible = computed(() => Boolean(
   || (props.cancelledHint && !props.canceling)
   || props.waitingForSlot
   || props.cancelRequested
-  || (props.interactiveBlock && !interactiveAnswered.value),
+  || (props.interactiveBlock && !props.interactiveAnswered),
 ))
 
 const queuedLabel = computed(() => {
@@ -36,8 +35,7 @@ const queuedLabel = computed(() => {
 })
 
 function handleInteractiveResponse(data) {
-  if (interactiveAnswered.value) return
-  interactiveAnswered.value = true
+  if (props.interactiveAnswered) return
   emit('interactive-response', data)
 }
 </script>

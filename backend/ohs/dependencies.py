@@ -40,12 +40,14 @@ from infr.client.claude_agent_gateway import ClaudeAgentGateway
 from infr.client.acp.acp_gateway import AcpGateway
 from infr.client.acp.provider import load_agent_providers
 from infr.client.claude_command_gateway import ClaudeCommandGateway
+from infr.client.cursor_command_gateway import CursorCommandGateway
 from infr.client.claude_plugin_manager import ClaudePluginManager
 from infr.client.claude_session_manager import ClaudeSessionManagerImpl
 from infr.client.connection_manager import ConnectionManager
 from infr.client.im_api_gateway import ImApiGateway
 from infr.client.im_ws_client import ImWsClient
 from infr.client.routing_agent_gateway import RoutingAgentGateway
+from infr.client.routing_command_gateway import RoutingCommandGateway
 from infr.client.settings_file_service import SettingsFileService
 from infr.client.terminal_executor import TerminalExecutor
 from infr.config.database import get_async_session
@@ -95,6 +97,14 @@ _agent_gateway = RoutingAgentGateway(
 )
 _claude_plugin_manager = ClaudePluginManager()
 _claude_command_gateway = ClaudeCommandGateway()
+_cursor_command_gateway = CursorCommandGateway()
+_command_gateway = RoutingCommandGateway(
+    default_provider="claude",
+    backends={
+        "claude": _claude_command_gateway,
+        "cursor": _cursor_command_gateway,
+    },
+)
 _claude_session_manager = ClaudeSessionManagerImpl()
 _settings_file_service = SettingsFileService()
 _terminal_executor = TerminalExecutor()
@@ -262,7 +272,7 @@ def get_plugin_application_service() -> PluginApplicationService:
 
 
 def get_command_application_service() -> CommandApplicationService:
-    return CommandApplicationService(command_gateway=_claude_command_gateway)
+    return CommandApplicationService(command_gateway=_command_gateway)
 
 
 async def get_command_policy_application_service(

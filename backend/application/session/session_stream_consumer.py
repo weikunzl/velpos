@@ -129,6 +129,12 @@ class SessionStreamConsumer:
                     sdk_sid = msg_dict.get("sdk_session_id")
                     if sdk_sid:
                         await self._accept_or_reject_sdk_session_id(session, sdk_sid, "query", run_id)
+                    available_commands = msg_dict.get("available_commands")
+                    if isinstance(available_commands, list) and available_commands:
+                        await self._connection_manager.broadcast(
+                            session.session_id,
+                            {"event": "commands_updated", "commands": available_commands},
+                        )
                     continue
 
                 message = MessageConversionService.convert_stream_message(msg_dict)

@@ -7,8 +7,8 @@ from typing import Any
 class CommandGateway(ABC):
 
     @abstractmethod
-    async def get_commands(self, cwd: str) -> list[dict[str, Any]]:
-        """Retrieve available Claude Code commands for the given project directory.
+    async def get_commands(self, cwd: str, provider: str | None = None) -> list[dict[str, Any]]:
+        """Retrieve available agent commands/skills for the given project directory.
 
         Returns:
             List of dicts, each with at least 'name' and 'description'.

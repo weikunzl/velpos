@@ -7,4 +7,7 @@ export {
   queuedBlockMode,
   shouldHideMessageFromList,
   buildInteractiveBlock,
+  messageKey,
+  isInteractiveAnswered,
 } from './lib/runtimeDockState.js'
+export { submitInteractiveResponse } from './lib/submitInteractiveResponse.js'

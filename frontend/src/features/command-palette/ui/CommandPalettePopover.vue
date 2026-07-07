@@ -93,14 +93,47 @@ function handleKeydown(e) {
     nextTick(() => scrollActiveIntoView())
   } else if (e.key === 'Enter') {
     e.preventDefault()
-    selectItem(filteredCommands.value[activeIndex.value])
+    const item = filteredCommands.value[activeIndex.value]
+    if (item?.type !== 'mcp') {
+      selectItem(item)
+    }
   } else if (e.key === 'Escape') {
     e.preventDefault()
     emit('close')
   }
 }
 
+const tabs = computed(() => {
+  const items = [
+    { key: 'all', label: 'All' },
+    { key: 'skill', label: 'Skills' },
+    { key: 'command', label: 'Commands' },
+  ]
+  if (props.commands.some((cmd) => cmd.type === 'mcp')) {
+    items.push({ key: 'mcp', label: 'MCP' })
+  }
+  return items
+})
+
+function commandLabel(cmd) {
+  if (cmd.type === 'mcp') return cmd.name
+  return `/${cmd.name}`
+}
+
+function commandTag(cmd) {
+  if (cmd.type === 'skill') return 'skill'
+  if (cmd.type === 'mcp') return 'mcp'
+  return 'built-in'
+}
+
+function commandTagClass(cmd) {
+  if (cmd.type === 'skill') return 'cmd-tag--prompt'
+  if (cmd.type === 'mcp') return 'cmd-tag--mcp'
+  return 'cmd-tag--local'
+}
+
 function selectItem(cmd) {
+  if (cmd?.type === 'mcp') return
   if (cmd) {
     emit('select', cmd)
   }
@@ -139,7 +172,7 @@ function onSearchInput(e) {
     <div class="cmd-toolbar">
       <div class="cmd-tabs">
         <button
-          v-for="tab in [{ key: 'all', label: 'All' }, { key: 'skill', label: 'Skills' }, { key: 'command', label: 'Commands' }]"
+          v-for="tab in tabs"
           :key="tab.key"
           class="cmd-tab-btn"
           :class="{ active: activeTab === tab.key }"
@@ -190,15 +223,19 @@ function onSearchInput(e) {
         <div
           v-else
           v-for="(cmd, index) in filteredCommands"
-          :key="cmd.name"
+          :key="cmd.name + ':' + cmd.type"
           class="cmd-item"
-          :class="{ 'cmd-item--active': index === activeIndex }"
+          :class="{
+            'cmd-item--active': index === activeIndex,
+            'cmd-item--readonly': cmd.type === 'mcp',
+          }"
           @click="selectItem(cmd)"
           @mouseenter="activeIndex = index"
         >
-          <span class="cmd-name">/{{ cmd.name }}</span>
-          <span v-if="cmd.type === 'skill'" class="cmd-tag cmd-tag--prompt">skill</span>
-          <span v-else class="cmd-tag cmd-tag--local">built-in</span>
+          <span class="cmd-name">{{ commandLabel(cmd) }}</span>
+          <span class="cmd-tag" :class="commandTagClass(cmd)">
+            {{ commandTag(cmd) }}
+          </span>
           <span class="cmd-desc">{{ cmd.description }}</span>
         </div>
       </template>
@@ -353,6 +390,20 @@ function onSearchInput(e) {
   color: var(--text-muted);
   background: var(--layer-glass);
   border: 1px solid var(--glass-border);
+}
+
+.cmd-tag--mcp {
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.cmd-item--readonly {
+  cursor: default;
+}
+
+.cmd-item--readonly:hover,
+.cmd-item--readonly.cmd-item--active {
+  background: color-mix(in srgb, var(--layer-active) 72%, transparent);
 }
 
 .cmd-desc {

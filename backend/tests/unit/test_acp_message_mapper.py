@@ -136,6 +136,72 @@ class TestAcpMessageMapper(unittest.TestCase):
         block = message["content"]["blocks"][0]
         self.assertEqual({"path": "doc/acp-handoff.md", "line": 1}, block["input"])
 
+    def test_tool_call_reads_nested_tool_call_payload(self) -> None:
+        message = map_acp_update(
+            {
+                "update": {
+                    "sessionUpdate": "tool_call",
+                    "toolCallId": "tool-1",
+                    "title": "Read File",
+                    "toolCall": {
+                        "rawInput": {"path": "README.md"},
+                        "locations": [{"uri": "file://src/main.py", "line": 10}],
+                    },
+                }
+            }
+        )
+
+        block = message["content"]["blocks"][0]
+        self.assertEqual("tool-1", block["id"])
+        self.assertEqual({"path": "README.md"}, block["input"])
+
+    def test_tool_call_update_maps_locations_only_patch(self) -> None:
+        message = map_acp_update(
+            {
+                "update": {
+                    "sessionUpdate": "tool_call_update",
+                    "toolCallId": "tool-1",
+                    "title": "Read File",
+                    "locations": [{"relativePath": "frontend/src/app/App.vue"}],
+                }
+            }
+        )
+
+        block = message["content"]["blocks"][0]
+        self.assertEqual("tool-1", block["id"])
+        self.assertEqual({"path": "frontend/src/app/App.vue"}, block["input"])
+        self.assertEqual([{"relativePath": "frontend/src/app/App.vue"}], block["locations"])
+
+    def test_tool_call_update_maps_output_content(self) -> None:
+        message = map_acp_update(
+            {
+                "update": {
+                    "sessionUpdate": "tool_call_update",
+                    "toolCallId": "tool-1",
+                    "title": "Read File",
+                    "content": "# Title\n\nBody",
+                }
+            }
+        )
+
+        block = message["content"]["blocks"][0]
+        self.assertEqual("# Title\n\nBody", block["output"])
+
+    def test_tool_call_update_maps_scalar_path_input(self) -> None:
+        message = map_acp_update(
+            {
+                "update": {
+                    "sessionUpdate": "tool_call_update",
+                    "toolCallId": "tool-1",
+                    "title": "Read File",
+                    "rawInput": "doc/acp-handoff.md",
+                }
+            }
+        )
+
+        block = message["content"]["blocks"][0]
+        self.assertEqual({"path": "doc/acp-handoff.md"}, block["input"])
+
     def test_maps_acp_tool_call_with_kind_field(self) -> None:
         """Tool-call payloads carry ``kind`` (execute/read/...) — not the update type."""
         message = map_acp_update(
@@ -155,6 +221,24 @@ class TestAcpMessageMapper(unittest.TestCase):
         self.assertEqual("tool-1", block["id"])
         self.assertEqual("Shell", block["name"])
         self.assertEqual({"command": "ls"}, block["input"])
+
+    def test_maps_available_commands_update_to_meta_message(self) -> None:
+        message = map_acp_update(
+            {
+                "update": {
+                    "sessionUpdate": "available_commands_update",
+                    "availableCommands": [
+                        {"name": "demo-skill", "description": "Demo skill"},
+                        {"name": "commit", "description": "Create a commit"},
+                    ],
+                }
+            }
+        )
+
+        self.assertEqual("_meta", message["message_type"])
+        self.assertEqual(2, len(message["available_commands"]))
+        self.assertEqual("demo-skill", message["available_commands"][0]["name"])
+        self.assertEqual("skill", message["available_commands"][0]["type"])
 
     def test_malformed_update_raises_clear_error(self) -> None:
         with self.assertRaisesRegex(ValueError, "ACP update must be an object"):

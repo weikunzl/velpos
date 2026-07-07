@@ -2,6 +2,11 @@
 import { ref, nextTick, watch, computed } from 'vue'
 import { useUserPreferences } from '@shared/lib/useUserPreferences'
 import { formatFileSize } from '@shared/lib/textParsers'
+import {
+  buildSlashCommandInput,
+  filterSlashCommandSuggestions,
+  getSlashCommandContext,
+} from '@features/command-palette/lib/slashCommandSuggest'
 
 const props = defineProps({
   disabled: {
@@ -12,25 +17,49 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  slashCommands: {
+    type: Array,
+    default: () => [],
+  },
+  placeholderOverride: {
+    type: String,
+    default: '',
+  },
 })
 
-const emit = defineEmits(['send'])
+const emit = defineEmits(['send', 'slash-select'])
 
 const { shouldEnterSend, shouldCtrlEnterSend } = useUserPreferences()
 
 const input = ref('')
 const isComposing = ref(false)
 const compositionEndedRecently = ref(false)
+const caretIndex = ref(0)
+const slashActiveIndex = ref(0)
+const slashContext = ref(null)
+
+const slashSuggestions = computed(() => {
+  if (!slashContext.value) return []
+  return filterSlashCommandSuggestions(props.slashCommands, slashContext.value.query)
+})
+
+const slashSuggestVisible = computed(() => (
+  !props.disabled
+  && !isComposing.value
+  && slashContext.value !== null
+  && slashSuggestions.value.length > 0
+))
 
 // 动态生成placeholder文本
 const placeholderText = computed(() => {
+  if (props.placeholderOverride) return props.placeholderOverride
   if (props.disabled) return 'Waiting for Claude to finish...'
   if (props.running) return 'Send follow-up (queued until Claude finishes)...'
 
   const sendShortcut = shouldEnterSend() ? 'Enter' : 'Ctrl+Enter'
   const newLineShortcut = shouldEnterSend() ? 'Ctrl+Enter' : 'Enter'
 
-  return `Send a message... (${sendShortcut} to send, ${newLineShortcut} for new line, paste or attach files)`
+  return `Send a message... (${sendShortcut} to send, ${newLineShortcut} for new line, type / for skills)`
 })
 
 // 动态生成发送按钮的提示文本
@@ -39,6 +68,7 @@ const sendButtonTitle = computed(() => {
   return `Send message (${sendShortcut})`
 })
 const inputEl = ref(null)
+const slashListEl = ref(null)
 const fileInputEl = ref(null)
 const pendingAttachments = ref([])
 
@@ -50,12 +80,49 @@ function autoResize() {
 }
 
 watch(input, () => {
-  nextTick(autoResize)
+  nextTick(() => {
+    autoResize()
+    syncSlashContext()
+  })
 })
+
+function syncCaret() {
+  caretIndex.value = inputEl.value?.selectionStart ?? input.value.length
+  syncSlashContext()
+}
+
+function syncSlashContext() {
+  slashContext.value = getSlashCommandContext(input.value, caretIndex.value)
+  slashActiveIndex.value = 0
+}
+
+function applySlashSelection(command) {
+  if (!command || !slashContext.value) return
+  input.value = buildSlashCommandInput(input.value, slashContext.value, command.name)
+  slashContext.value = null
+  slashActiveIndex.value = 0
+  emit('slash-select', command)
+  nextTick(() => {
+    const pos = input.value.length
+    inputEl.value?.setSelectionRange(pos, pos)
+    autoResize()
+    inputEl.value?.focus()
+  })
+}
+
+function scrollSlashActiveIntoView() {
+  const container = slashListEl.value
+  if (!container) return
+  const items = container.querySelectorAll('.slash-item')
+  const el = items[slashActiveIndex.value]
+  if (el) el.scrollIntoView({ block: 'nearest' })
+}
 
 function handleSend() {
   const text = input.value.trim()
   if ((!text && pendingAttachments.value.length === 0) || props.disabled) return
+
+  slashContext.value = null
 
   if (pendingAttachments.value.length > 0) {
     emit('send', {
@@ -94,6 +161,32 @@ function handleCompositionEnd() {
 }
 
 function handleKeydown(e) {
+  if (slashSuggestVisible.value) {
+    const len = slashSuggestions.value.length
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      slashActiveIndex.value = (slashActiveIndex.value + 1) % len
+      nextTick(scrollSlashActiveIntoView)
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      slashActiveIndex.value = (slashActiveIndex.value - 1 + len) % len
+      nextTick(scrollSlashActiveIntoView)
+      return
+    }
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault()
+      applySlashSelection(slashSuggestions.value[slashActiveIndex.value])
+      return
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      slashContext.value = null
+      return
+    }
+  }
+
   if (e.key === 'Enter') {
     // During IME composition or just after composition, defer all Enter handling to browser default
     if (isComposing.value || compositionEndedRecently.value) {
@@ -242,6 +335,26 @@ defineExpose({ setInput, addImage, appendText, clearAttachments })
 
 <template>
   <div class="input-area" @drop="handleDrop" @dragover="handleDragover" @click="handleAreaClick">
+    <Transition name="slash-fade">
+      <div v-if="slashSuggestVisible" ref="slashListEl" class="slash-suggest">
+        <button
+          v-for="(cmd, index) in slashSuggestions"
+          :key="cmd.name + ':' + cmd.type"
+          type="button"
+          class="slash-item"
+          :class="{ 'slash-item--active': index === slashActiveIndex }"
+          @mousedown.prevent="applySlashSelection(cmd)"
+          @mouseenter="slashActiveIndex = index"
+        >
+          <span class="slash-name">/{{ cmd.name }}</span>
+          <span class="slash-tag" :class="cmd.type === 'skill' ? 'slash-tag--skill' : 'slash-tag--command'">
+            {{ cmd.type === 'skill' ? 'skill' : 'command' }}
+          </span>
+          <span v-if="cmd.argumentHint" class="slash-hint">{{ cmd.argumentHint }}</span>
+          <span class="slash-desc">{{ cmd.description }}</span>
+        </button>
+      </div>
+    </Transition>
     <div v-if="pendingAttachments.length > 0" class="attachment-previews">
       <div
         v-for="(item, i) in pendingAttachments"
@@ -265,6 +378,9 @@ defineExpose({ setInput, addImage, appendText, clearAttachments })
       ref="inputEl"
       v-model="input"
       @keydown="handleKeydown"
+      @input="syncCaret"
+      @click="syncCaret"
+      @keyup="syncCaret"
       @compositionstart="handleCompositionStart"
       @compositionend="handleCompositionEnd"
       @paste="handlePaste"
@@ -537,5 +653,95 @@ defineExpose({ setInput, addImage, appendText, clearAttachments })
 .send-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.slash-suggest {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-glass);
+  padding: 4px;
+  z-index: 120;
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+.slash-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.slash-item:hover,
+.slash-item--active {
+  background: var(--layer-active);
+}
+
+.slash-name {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--accent);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.slash-tag {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.slash-tag--skill {
+  color: var(--purple);
+  background: var(--purple-dim);
+}
+
+.slash-tag--command {
+  color: var(--text-muted);
+  background: var(--layer-glass);
+  border: 1px solid var(--glass-border);
+}
+
+.slash-hint {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.slash-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slash-fade-enter-active,
+.slash-fade-leave-active {
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.slash-fade-enter-from,
+.slash-fade-leave-to {
+  opacity: 0;
+  transform: translateY(4px);
 }
 </style>

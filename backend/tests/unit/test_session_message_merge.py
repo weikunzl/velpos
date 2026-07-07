@@ -109,6 +109,46 @@ class TestSessionMessageMerge(unittest.TestCase):
         self.assertEqual({"path": "README.md"}, stored.content["blocks"][0]["input"])
         self.assertEqual(2, len(session.messages))
 
+    def test_merge_or_add_message_patches_tool_use_output(self) -> None:
+        session = Session.create(model="auto", provider="cursor")
+        session.merge_or_add_message(
+            Message.create(
+                message_type=MessageType.ASSISTANT,
+                content={
+                    "blocks": [
+                        {
+                            "type": "tool_use",
+                            "id": "tool-1",
+                            "name": "Read File",
+                            "input": {"path": "README.md"},
+                        }
+                    ]
+                },
+            )
+        )
+
+        stored, merged, index = session.merge_or_add_message(
+            Message.create(
+                message_type=MessageType.ASSISTANT,
+                content={
+                    "blocks": [
+                        {
+                            "type": "tool_use",
+                            "id": "tool-1",
+                            "name": "Read File",
+                            "output": "# Velpos",
+                        }
+                    ]
+                },
+            )
+        )
+
+        self.assertTrue(merged)
+        self.assertEqual(0, index)
+        block = stored.content["blocks"][0]
+        self.assertEqual({"path": "README.md"}, block["input"])
+        self.assertEqual("# Velpos", block["output"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,7 +6,7 @@ import os
 import traceback
 import uuid
 
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -21,6 +21,7 @@ from domain.session.model.message import Message
 from domain.session.model.message_type import MessageType
 from domain.session.model.session import Session
 from domain.session.service.message_conversion_service import MessageConversionService
+from domain.shared.utils import is_transient_agent_error
 from domain.project.repository.project_repository import ProjectRepository
 from domain.session.repository.session_repository import SessionRepository
 from domain.shared.business_exception import BusinessException
@@ -335,6 +336,134 @@ class SessionQueryEngine:
             return get_provider(session.session_id) != "cursor"
         return True
 
+    async def _open_agent_stream(
+        self,
+        *,
+        session: Session,
+        command: RunQueryCommand,
+        actual_prompt: str,
+        team_config: dict[str, Any],
+        is_connected: bool,
+        run_id: str,
+    ) -> tuple[AsyncIterator[dict], bool]:
+        """Open or reuse an agent stream, reconnecting when needed."""
+        msg_stream = None
+        if is_connected:
+            try:
+                msg_stream = self._claude_agent_gateway.send_query(
+                    session_id=command.session_id,
+                    prompt=actual_prompt,
+                )
+            except Exception as send_err:
+                logger.warning(
+                    "[session=%s] send_query 失败 (%s), 回退到 connect",
+                    command.session_id,
+                    send_err,
+                )
+                await self._claude_agent_gateway.disconnect(command.session_id)
+                is_connected = False
+
+        if msg_stream is None:
+            resume_sdk_session_id = await self._resolve_resume_sdk_session_id(session)
+            msg_stream = await self._connect_with_retry(
+                session=session,
+                command=command,
+                actual_prompt=actual_prompt,
+                team_config=team_config,
+                resume_sdk_session_id=resume_sdk_session_id,
+                run_id=run_id,
+            )
+            is_connected = False
+        return msg_stream, is_connected
+
+    async def _connect_with_retry(
+        self,
+        *,
+        session: Session,
+        command: RunQueryCommand,
+        actual_prompt: str,
+        team_config: dict[str, Any],
+        resume_sdk_session_id: str,
+        run_id: str = "",
+    ) -> AsyncIterator[dict]:
+        max_retries = max(1, int(os.getenv("AGENT_CONNECT_MAX_RETRIES", "3")))
+        last_err: Exception | None = None
+        for attempt in range(max_retries):
+            try:
+                return self._claude_agent_gateway.connect(
+                    session_id=command.session_id,
+                    model=session.model,
+                    prompt=actual_prompt,
+                    cwd=session.project_dir,
+                    sdk_session_id=resume_sdk_session_id,
+                    system_prompt=team_config.get("system_prompt"),
+                    mcp_servers=team_config.get("mcp_servers"),
+                    enable_file_checkpointing=True,
+                )
+            except Exception as exc:
+                last_err = exc
+                if not is_transient_agent_error(exc) or attempt >= max_retries - 1:
+                    raise
+                delay = min(2 ** attempt, 8)
+                logger.warning(
+                    "[session=%s] Agent 连接失败 (%s), %ss 后重试 (%d/%d)",
+                    command.session_id,
+                    exc,
+                    delay,
+                    attempt + 1,
+                    max_retries,
+                )
+                if run_id:
+                    await self._recorder.record_timeline_event(
+                        command.session_id,
+                        run_id,
+                        "retry",
+                        "Agent 连接中断，正在重试",
+                        {"error": str(exc)[:500], "attempt": attempt + 1, "max": max_retries},
+                    )
+                await self._claude_agent_gateway.disconnect(command.session_id)
+                await asyncio.sleep(delay)
+        raise last_err  # type: ignore[misc]
+
+    async def _retry_stream_after_error(
+        self,
+        *,
+        session: Session,
+        command: RunQueryCommand,
+        actual_prompt: str,
+        team_config: dict[str, Any],
+        run_id: str,
+        stream_err: Exception,
+    ) -> bool:
+        await self._recorder.record_audit_event(
+            command.session_id,
+            "query_retrying",
+            payload={"run_id": run_id, "error": str(stream_err)[:500]},
+        )
+        await self._recorder.record_timeline_event(
+            command.session_id,
+            run_id,
+            "retry",
+            "消息流中断，重新连接",
+            {"error": str(stream_err)[:500]},
+        )
+        logger.warning(
+            "[session=%s] 消息流中断 (%s), 重新 connect",
+            command.session_id,
+            stream_err,
+        )
+        await self._claude_agent_gateway.disconnect(command.session_id)
+        resume_sdk_session_id = await self._resolve_resume_sdk_session_id(session)
+        msg_stream = await self._connect_with_retry(
+            session=session,
+            command=command,
+            actual_prompt=actual_prompt,
+            team_config=team_config,
+            resume_sdk_session_id=resume_sdk_session_id,
+            run_id=run_id,
+        )
+        return await self._stream_consumer.consume(session, msg_stream, run_id)
+
     # ------------------------------------------------------------------
     # Phase 2: Execute streaming SDK interaction
     # ------------------------------------------------------------------
@@ -394,34 +523,14 @@ class SessionQueryEngine:
             session.update_trace_id(trace_id)
             await self._save_session(session, commit=True)
 
-        msg_stream = None
-        if is_connected:
-            try:
-                msg_stream = self._claude_agent_gateway.send_query(
-                    session_id=command.session_id,
-                    prompt=actual_prompt,
-                )
-            except Exception as send_err:
-                logger.warning(
-                    "[session=%s] send_query 失败 (%s), 回退到 connect",
-                    command.session_id,
-                    send_err,
-                )
-                await self._claude_agent_gateway.disconnect(command.session_id)
-                msg_stream = None
-
-        if msg_stream is None:
-            resume_sdk_session_id = await self._resolve_resume_sdk_session_id(session)
-            msg_stream = self._claude_agent_gateway.connect(
-                session_id=command.session_id,
-                model=session.model,
-                prompt=actual_prompt,
-                cwd=session.project_dir,
-                sdk_session_id=resume_sdk_session_id,
-                system_prompt=team_config.get("system_prompt"),
-                mcp_servers=team_config.get("mcp_servers"),
-                enable_file_checkpointing=True,
-            )
+        msg_stream, is_connected = await self._open_agent_stream(
+            session=session,
+            command=command,
+            actual_prompt=actual_prompt,
+            team_config=team_config,
+            is_connected=is_connected,
+            run_id=run_id,
+        )
 
         max_auto_continues = int(os.getenv("CLAUDE_MAX_AUTO_CONTINUES", "10"))
 
@@ -436,36 +545,15 @@ class SessionQueryEngine:
                 await self._recorder.fail_run_step(run_step, {"cancelled": True, "stage": "stream"})
                 ctx.cancelled_during_stream = True
                 return
-            if is_connected:
-                await self._recorder.record_audit_event(
-                    command.session_id,
-                    "query_retrying",
-                    payload={"run_id": run_id, "error": str(stream_err)[:500]},
+            if is_connected or is_transient_agent_error(stream_err):
+                got_result = await self._retry_stream_after_error(
+                    session=session,
+                    command=command,
+                    actual_prompt=actual_prompt,
+                    team_config=team_config,
+                    run_id=run_id,
+                    stream_err=stream_err,
                 )
-                await self._recorder.record_timeline_event(
-                    command.session_id,
-                    run_id,
-                    "retry",
-                    "消息流中断，重新连接",
-                    {"error": str(stream_err)[:500]},
-                )
-                logger.warning(
-                    "[session=%s] 消息流中断 (%s), 重新 connect",
-                    command.session_id,
-                    stream_err,
-                )
-                await self._claude_agent_gateway.disconnect(command.session_id)
-                resume_sdk_session_id = await self._resolve_resume_sdk_session_id(session)
-                msg_stream = self._claude_agent_gateway.connect(
-                    session_id=command.session_id,
-                    model=session.model,
-                    prompt=actual_prompt,
-                    cwd=session.project_dir,
-                    sdk_session_id=resume_sdk_session_id,
-                    system_prompt=team_config.get("system_prompt"),
-                    mcp_servers=team_config.get("mcp_servers"),
-                )
-                got_result = await self._stream_consumer.consume(session, msg_stream, run_id)
             else:
                 raise
 
@@ -646,6 +734,12 @@ class SessionQueryEngine:
 
         error_detail = str(e)
         error_traceback = traceback.format_exc()
+        if is_transient_agent_error(e):
+            error_detail = (
+                "Cursor Agent 与云端连接不稳定（PING 超时或连接中断）。"
+                "请稍后重试；若持续出现，请检查网络或重新登录 Cursor（agent login）。"
+                f" 原始错误: {error_detail}"
+            )
 
         await self._recorder.fail_run_step(run_step, {"error": error_detail[:500]})
         await self._recorder.record_audit_event(

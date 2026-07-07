@@ -11,6 +11,7 @@ from domain.session.model.session_audit_event import SessionAuditEvent
 from domain.session.model.session_run_step import SessionRunStep
 from domain.session.repository.session_audit_event_repository import SessionAuditEventRepository
 from domain.session.service.message_conversion_service import MessageConversionService
+from domain.shared.utils import summarize_tool_name
 
 logger = logging.getLogger(__name__)
 
@@ -210,7 +211,7 @@ class SessionObservabilityRecorder:
                 if not isinstance(block, dict):
                     continue
                 if block.get("type") == "tool_use":
-                    name = str(block.get("name") or "tool")
+                    name = summarize_tool_name(str(block.get("name") or "tool"))
                     events.append((
                         "tool_use",
                         f"工具调用：{name}",

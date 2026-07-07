@@ -14,6 +14,7 @@ from domain.shared.async_utils import safe_create_task
 from application.im_binding.im_channel_application_service import ImChannelApplicationService
 from application.session.session_timeline_event_service import SessionTimelineEventService
 from application.usage.usage_governance_application_service import UsageGovernanceApplicationService
+from domain.shared.utils import summarize_tool_name
 
 from infr.config.database import async_session_factory
 from infr.repository.channel_init_repository_impl import ChannelInitRepositoryImpl
@@ -182,10 +183,11 @@ class SessionEventCoordinator:
     async def timeline_broadcast_hook(self, session_id: str, data: dict) -> None:
         event = data.get("event")
         if event == "permission_request":
+            tool_name = summarize_tool_name(str(data.get("tool_name") or ""))
             await self.record_timeline_event(
                 session_id,
                 "permission_request",
-                f"权限请求：{data.get('tool_name', '')}",
+                f"权限请求：{tool_name}",
                 {"tool_name": data.get("tool_name", ""), "tool_input": data.get("tool_input", "")},
                 status="running",
             )

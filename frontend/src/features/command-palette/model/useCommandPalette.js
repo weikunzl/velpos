@@ -9,7 +9,21 @@ const error = ref(null)
 const searchQuery = ref('')
 
 let cachedProjectDir = null
+let cachedProvider = null
 let _loadCmdSeq = 0
+
+const invokableCommands = computed(() => commands.value.filter((cmd) => (
+  cmd.isUserInvocable !== false
+  && cmd.type !== 'mcp'
+  && cmd.type !== 'local'
+  && cmd.type !== 'local-jsx'
+  && cmd.enabled !== false
+  && cmd.visible !== false
+)))
+
+const paletteCommands = computed(() => commands.value.filter((cmd) => (
+  cmd.enabled !== false && cmd.visible !== false
+)))
 
 const policyRows = computed(() => {
   const rowsByKey = new Map()
@@ -45,9 +59,9 @@ const policyRows = computed(() => {
 })
 
 export function useCommandPalette() {
-  async function loadCommands(projectDir, force = false) {
+  async function loadCommands(projectDir, provider = 'claude', force = false) {
     if (!projectDir) return
-    if (!force && cachedProjectDir === projectDir && commands.value.length > 0) {
+    if (!force && cachedProjectDir === projectDir && cachedProvider === provider && commands.value.length > 0) {
       return
     }
     loading.value = true
@@ -55,13 +69,14 @@ export function useCommandPalette() {
     const seq = ++_loadCmdSeq
     try {
       const [commandData, policyData] = await Promise.all([
-        fetchCommands(projectDir),
+        fetchCommands(projectDir, provider),
         fetchCommandPolicies(projectDir),
       ])
       if (seq !== _loadCmdSeq) return
-      commands.value = (commandData.commands || []).filter(c => c.isUserInvocable !== false)
+      commands.value = commandData.commands || []
       policies.value = policyData.policies || []
       cachedProjectDir = projectDir
+      cachedProvider = provider
     } catch (e) {
       if (seq !== _loadCmdSeq) return
       error.value = e.message
@@ -83,7 +98,7 @@ export function useCommandPalette() {
         default_args: row.default_args || {},
         ...patch,
       })
-      await loadCommands(projectDir, true)
+      await loadCommands(projectDir, cachedProvider || 'claude', true)
     } catch (e) {
       error.value = e.message
     } finally {
@@ -105,12 +120,26 @@ export function useCommandPalette() {
 
   function invalidateCache() {
     cachedProjectDir = null
+    cachedProvider = null
     commands.value = []
     policies.value = []
   }
 
+  function setRemoteCommands(remoteCommands, projectDir = null, providerName = null) {
+    if (!Array.isArray(remoteCommands)) return
+    const merged = new Map(commands.value.map((cmd) => [`${cmd.name}:${cmd.type}`, cmd]))
+    for (const cmd of remoteCommands) {
+      merged.set(`${cmd.name}:${cmd.type || 'unknown'}`, cmd)
+    }
+    commands.value = Array.from(merged.values())
+    if (projectDir) cachedProjectDir = projectDir
+    if (providerName) cachedProvider = providerName
+  }
+
   return {
     commands,
+    invokableCommands,
+    paletteCommands,
     policies,
     policyRows,
     loading,
@@ -122,5 +151,6 @@ export function useCommandPalette() {
     togglePanel,
     closePanel,
     invalidateCache,
+    setRemoteCommands,
   }
 }

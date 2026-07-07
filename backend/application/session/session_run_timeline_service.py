@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from domain.session.acl.connection_manager import ConnectionManager
 from domain.session.model.session_run_step import SessionRunStep
 from domain.session.repository.session_run_step_repository import SessionRunStepRepository
-from domain.session.acl.connection_manager import ConnectionManager
+from domain.shared.utils import truncate_text
 
 
 class SessionRunTimelineService:
@@ -27,7 +28,7 @@ class SessionRunTimelineService:
         *,
         commit: bool = False,
     ) -> SessionRunStep:
-        step = SessionRunStep.start(session_id, run_id, step_type, title, payload)
+        step = SessionRunStep.start(session_id, run_id, step_type, truncate_text(title), payload)
         await self._save_and_emit("run_step_started", step, commit=commit)
         return step
 

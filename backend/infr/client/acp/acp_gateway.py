@@ -13,6 +13,7 @@ from typing import Any, AsyncIterator, Awaitable, Callable
 from domain.session.acl.agent_gateway import AgentCapability, AgentGateway, NormalizedMessage
 from domain.shared.async_utils import safe_create_task
 from infr.client.acp.client_handlers import AcpClientHandlers
+from infr.client.acp.cursor_mcp_config import resolve_acp_mcp_servers
 from infr.client.acp.message_mapper import map_acp_update
 from infr.client.acp.provider import AgentProviderConfig
 from infr.client.acp.transport import AcpTransport, StdioTransport
@@ -241,6 +242,15 @@ class AcpGateway(AgentGateway):
     def is_connected(self, session_id: str) -> bool:
         return session_id in self._connections
 
+    def is_process_alive(self, session_id: str) -> bool:
+        connection = self._connections.get(session_id)
+        if connection is None:
+            return False
+        process = getattr(connection.transport, "process", None)
+        if process is None:
+            return True
+        return process.returncode is None
+
     def get_state(self, session_id: str) -> str:
         return self._states.get(session_id, "idle")
 
@@ -346,7 +356,7 @@ class AcpGateway(AgentGateway):
         sdk_session_id: str,
         mcp_servers: dict | None,
     ) -> tuple[str, NormalizedMessage | None]:
-        mcp_payload = _mcp_servers_payload(mcp_servers)
+        mcp_payload = _mcp_servers_payload(mcp_servers, cwd=cwd)
         resume_meta: NormalizedMessage | None = None
 
         if sdk_session_id:
@@ -722,16 +732,14 @@ class AcpGateway(AgentGateway):
         return StdioTransport(command=provider.command, args=provider.args, env=provider.env)
 
 
-def _mcp_servers_payload(mcp_servers: dict | list | None) -> list[Any]:
+def _mcp_servers_payload(mcp_servers: dict | list | None, cwd: str = "") -> list[Any]:
     """Return ACP-compatible MCP server payload.
 
-    Cursor's documented minimal client sends an array for ``mcpServers``. Velpos
-    may still pass Claude-style mappings, so keep an empty list for the common
-    no-MCP case and pass through explicit list values.
+    Cursor ACP reads MCP from ``session/new.mcpServers`` and from
+    ``.cursor/mcp.json``. Velpos merges both explicit list values and cwd-based
+  config files into the ACP payload.
     """
-    if isinstance(mcp_servers, list):
-        return mcp_servers
-    return []
+    return resolve_acp_mcp_servers(mcp_servers, cwd=cwd)
 
 
 def _synthetic_result_message(result: Any) -> NormalizedMessage:

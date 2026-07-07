@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, inject, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { ref, computed, inject, onMounted, onBeforeUnmount, watch, nextTick, provide } from 'vue'
 import { useGlobalHotkeys } from '@shared/lib/useGlobalHotkeys'
 import { formatDuration } from '@features/message-display'
 import { useDialogManager } from '@shared/lib/useDialogManager'
@@ -7,7 +7,8 @@ import { useSession, listModels, createSessionBranch, listSessionBranches, compa
 import { useProject, getGitBranches, checkoutGitBranch } from '@entities/project'
 import { MessageInput, useSendMessage } from '@features/send-message'
 import { useCancelQuery, QueryRuntimeBar, useQueryElapsed } from '@features/cancel-query'
-import { RuntimeActionDock, findPendingInteractive, resolveQueuedPrompt, shouldShowQueuedBlock, queuedBlockMode, shouldHideMessageFromList, buildInteractiveBlock } from '@features/runtime-dock'
+import { RuntimeActionDock, findPendingInteractive, resolveQueuedPrompt, shouldShowQueuedBlock, queuedBlockMode, shouldHideMessageFromList, buildInteractiveBlock, isInteractiveAnswered, submitInteractiveResponse } from '@features/runtime-dock'
+import { useAppToast } from '@shared/lib/useAppToast'
 import { MessageList, ThinkingIndicator } from '@features/message-display'
 import { ClearContextButton, useClearContext } from '@features/clear-context'
 import { CommandPaletteButton, CommandPalettePopover, useCommandPalette } from '@features/command-palette'
@@ -31,6 +32,7 @@ const {
   session, messages, status, queued, queuedPrompt, canceling, cancelledHint, waitingForSlot, recovery, currentSessionId,
   queryHistory, queryStartedAt, setCurrentSessionId, updateSession, setError, setCanceling, addSession,
   restoredPrompt, setRestoredPrompt,
+  markInteractiveAnsweredFor, getInteractiveAnsweredKey,
 } = useSession()
 const { provider, isClaude, isCursor, label: agentProviderLabel, showClaudeControls } = useAgentProvider(session)
 const { currentProject, updateProjectInList } = useProject()
@@ -38,13 +40,18 @@ const { isMobile } = useViewport()
 const { debugMode, runtimePanelVisible, toggleDebug, toggleRuntimePanel } = useChatPanelTools()
 
 const wsConnection = inject('wsConnection')
+const { showToast } = useAppToast()
 
 const isRunning = computed(() => status.value === 'running')
 const recoveryPending = computed(() => recovery.value?.pending_request || null)
 const recoveryQueued = computed(() => recovery.value?.queued_command || null)
 const isCancelRequested = computed(() => Boolean(recovery.value?.cancel_requested))
 const pendingInteractive = computed(() => findPendingInteractive(messages.value))
-const dockInteractiveAnswered = ref(false)
+provide('pendingInteractive', pendingInteractive)
+const dockInteractiveAnswered = computed(() => isInteractiveAnswered(pendingInteractive.value, {
+  pendingInteractive: pendingInteractive.value,
+  answeredKey: getInteractiveAnsweredKey(currentSessionId.value),
+}))
 const dockQueuedText = computed(() => resolveQueuedPrompt({
   queued: queued.value,
   isRunning: isRunning.value,
@@ -102,32 +109,34 @@ const isSessionLoading = computed(() =>
 const MESSAGE_PAGE_SIZE = 25
 
 const allFilteredMessages = computed(() => {
-  if (debugMode.value) return messages.value
   const currentPlanBlock = latestTodoWriteBlock.value
-  return messages.value
-    .filter(msg => msg.type !== 'tool_result' && (msg.type !== 'system' || msg.content?.marker === 'compact'))
-    .map(msg => {
-      if (msg.type === 'assistant' && msg.content?.blocks) {
-        const filtered = msg.content.blocks.filter(
-          b => b.type !== 'tool_result'
-            && b.type !== 'thinking'
-            && (b.type !== 'tool_use' || b === currentPlanBlock)
-        )
-        if (filtered.length === 0) return null
-        return { ...msg, content: { ...msg.content, blocks: filtered } }
-      }
-      return msg
-    })
-    .filter(Boolean)
-    .filter(msg => !shouldHideMessageFromList(msg, {
-      queuedPrompt: queuedPrompt.value,
-      queued: queued.value,
-      isRunning: isRunning.value,
-      recoveryQueued: recoveryQueued.value,
-      pendingInteractive: pendingInteractive.value,
-      dockInteractiveAnswered: dockInteractiveAnswered.value,
-      messages: messages.value,
-    }))
+  const base = debugMode.value
+    ? messages.value
+    : messages.value
+      .filter(msg => msg.type !== 'tool_result' && (msg.type !== 'system' || msg.content?.marker === 'compact'))
+      .map(msg => {
+        if (msg.type === 'assistant' && msg.content?.blocks) {
+          const filtered = msg.content.blocks.filter(
+            b => b.type !== 'tool_result'
+              && b.type !== 'thinking'
+              && (b.type !== 'tool_use' || b === currentPlanBlock)
+          )
+          if (filtered.length === 0) return null
+          return { ...msg, content: { ...msg.content, blocks: filtered } }
+        }
+        return msg
+      })
+      .filter(Boolean)
+
+  return base.filter(msg => !shouldHideMessageFromList(msg, {
+    queuedPrompt: queuedPrompt.value,
+    queued: queued.value,
+    isRunning: isRunning.value,
+    recoveryQueued: recoveryQueued.value,
+    pendingInteractive: pendingInteractive.value,
+    dockInteractiveAnswered: dockInteractiveAnswered.value,
+    messages: messages.value,
+  }))
 })
 
 const visibleCount = ref(MESSAGE_PAGE_SIZE)
@@ -148,6 +157,8 @@ const { clearing, clearContext } = useClearContext()
 
 const {
   commands,
+  invokableCommands,
+  paletteCommands,
   policyRows,
   loading: cmdLoading,
   visible: cmdVisible,
@@ -158,6 +169,13 @@ const {
   closePanel,
   invalidateCache: invalidateCmdCache,
 } = useCommandPalette()
+
+const inputPlaceholder = computed(() => {
+  if (isCursor.value) {
+    return 'Send a message... (Enter to send, type / for skills, Skills button for MCP)'
+  }
+  return ''
+})
 
 const messageInputRef = ref(null)
 const lastCancelAt = ref(0)
@@ -218,6 +236,8 @@ useDialog('command-palette', cmdVisible)
 
 const { compacting, compactContext } = useCompactContext()
 
+const availableModels = ref([])
+
 async function refreshAvailableModels() {
   if (isCursor.value) {
     availableModels.value = []
@@ -233,7 +253,16 @@ async function refreshAvailableModels() {
 
 watch(provider, () => {
   refreshAvailableModels()
+  if (projectDir.value) {
+    loadCommands(projectDir.value, provider.value, true)
+  }
 }, { immediate: true })
+
+watch(projectDir, (dir) => {
+  if (dir) {
+    loadCommands(dir, provider.value, true)
+  }
+})
 
 onMounted(async () => {
   // Fetch available IM channels and binding status for current session
@@ -349,8 +378,6 @@ const totalUsage = computed(() => {
 // Model switching — dynamic from backend
 const showModelMenu = ref(false)
 const currentModel = computed(() => session.value?.model || 'unknown')
-const availableModels = ref([])
-
 
 function getModelLabel(model) {
   const found = availableModels.value.find(m => m.value === model)
@@ -534,25 +561,17 @@ function handleCancel() {
   }
 }
 
-watch(currentSessionId, () => {
-  dockInteractiveAnswered.value = false
-})
-
-watch(pendingInteractive, () => {
-  dockInteractiveAnswered.value = false
-})
 
 function handleDockInteractiveResponse(data) {
-  const conn = wsConnection?.value
-  if (!conn || conn.getReadyState() !== WebSocket.OPEN) {
-    setError('Not connected')
-    return
-  }
-  if (conn.send({ action: 'user_response', data })) {
-    dockInteractiveAnswered.value = true
-  } else {
-    setError('Connection lost, response not sent')
-  }
+  submitInteractiveResponse({
+    wsConnection,
+    sessionId: currentSessionId.value,
+    pendingMessage: pendingInteractive.value,
+    data,
+    markAnswered: markInteractiveAnsweredFor,
+    showToast,
+    setError,
+  })
 }
 
 const rewindableMessages = computed(() => {
@@ -654,7 +673,7 @@ function handleClear() {
 
 function handleCommandsClick() {
   if (projectDir.value) {
-    loadCommands(projectDir.value)
+    loadCommands(projectDir.value, provider.value)
   }
   togglePanel()
 }
@@ -665,6 +684,7 @@ const LOCAL_COMMAND_HANDLERS = {
 
 function handleCommandSelect(cmd) {
   closePanel()
+  if (cmd.type === 'mcp') return
   if (cmd.type === 'local' || cmd.type === 'local-jsx') {
     const handler = LOCAL_COMMAND_HANDLERS[cmd.name]
     if (handler) {
@@ -1156,7 +1176,7 @@ function formatMaxTokens(n) {
     <div class="input-section">
       <CommandPalettePopover
         :visible="cmdVisible"
-        :commands="commands"
+        :commands="paletteCommands"
         :policy-rows="policyRows"
         :loading="cmdLoading"
         :search-query="searchQuery"
@@ -1353,8 +1373,8 @@ function formatMaxTokens(n) {
           </div>
         </div>
         <CommandPaletteButton
-          v-if="showClaudeControls"
-          :disabled="!currentSessionId"
+          v-if="currentSessionId"
+          :disabled="!projectDir"
           @click="handleCommandsClick"
         />
         <ClearContextButton
@@ -1440,6 +1460,7 @@ function formatMaxTokens(n) {
         :waiting-for-slot="waitingForSlot"
         :cancel-requested="isCancelRequested"
         :interactive-block="dockInteractiveBlock"
+        :interactive-answered="dockInteractiveAnswered"
         @interactive-response="handleDockInteractiveResponse"
       />
       <QueryRuntimeBar
@@ -1453,7 +1474,14 @@ function formatMaxTokens(n) {
         @stop="handleCancel"
       />
       <div class="input-row">
-        <MessageInput ref="messageInputRef" :running="isRunning" :disabled="canceling" @send="handleSend" />
+        <MessageInput
+          ref="messageInputRef"
+          :running="isRunning"
+          :disabled="canceling"
+          :slash-commands="invokableCommands"
+          :placeholder-override="inputPlaceholder"
+          @send="handleSend"
+        />
       </div>
       <!-- Session Dashboard -->
       <div class="session-dashboard" v-if="currentSessionId">

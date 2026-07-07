@@ -27,6 +27,7 @@ function _ensureState(sessionId) {
       canceling: false,
       cancelledHint: false,
       queryStartedAt: null,
+      interactiveAnsweredKey: null,
       _nextMsgId: 0,
     })
   }
@@ -124,14 +125,20 @@ function addMessageTo(sessionId, msg) {
     && updateIndex < state.messages.length
     && state.messages[updateIndex].type === stored.type
   ) {
-    state.messages[updateIndex].content = stored.content
+    state.messages[updateIndex] = {
+      ...state.messages[updateIndex],
+      content: stored.content,
+    }
     return
   }
 
   if (updateLast && state.messages.length > 0) {
     const last = state.messages[state.messages.length - 1]
     if (last.type === stored.type) {
-      last.content = stored.content
+      state.messages[state.messages.length - 1] = {
+        ...last,
+        content: stored.content,
+      }
       return
     }
   }
@@ -288,6 +295,22 @@ function setErrorFor(sessionId, err) {
   state.error = err
 }
 
+function markInteractiveAnsweredFor(sessionId, msgKey) {
+  const state = _ensureState(sessionId)
+  if (!state) return
+  state.interactiveAnsweredKey = msgKey || null
+}
+
+function clearInteractiveAnsweredFor(sessionId) {
+  const state = _ensureState(sessionId)
+  if (!state) return
+  state.interactiveAnsweredKey = null
+}
+
+function getInteractiveAnsweredKey(sessionId) {
+  return _stateMap.get(sessionId)?.interactiveAnsweredKey ?? null
+}
+
 function setCancelingFor(sessionId, val) {
   const state = _ensureState(sessionId)
   if (!state) return
@@ -422,6 +445,9 @@ export function useSession() {
     setQueuedFor,
     setQueuedPromptFor,
     setErrorFor,
+    markInteractiveAnsweredFor,
+    clearInteractiveAnsweredFor,
+    getInteractiveAnsweredKey,
     setCancelingFor,
     getCancelingFor,
     showCancelledHintFor,

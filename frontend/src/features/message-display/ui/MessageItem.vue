@@ -1,8 +1,11 @@
 <script setup>
-import { ref, shallowRef, watch, onMounted, nextTick, inject } from 'vue'
+import { computed, ref, shallowRef, watch, onMounted, nextTick, inject } from 'vue'
 import { cachedParse } from '../lib/markdownConfig'
 import { formatFileSize } from '@shared/lib/textParsers'
 import { openPath } from '@features/terminal'
+import { isInteractiveAnswered, submitInteractiveResponse } from '@features/runtime-dock'
+import { useSession } from '@entities/session'
+import { useAppToast } from '@shared/lib/useAppToast'
 import AssistantBlock from './AssistantBlock.vue'
 import ThinkingBlock from './ThinkingBlock.vue'
 import ToolUseBlock from './ToolUseBlock.vue'
@@ -21,15 +24,26 @@ const props = defineProps({
 })
 
 const wsConnection = inject('wsConnection')
+const { currentSessionId, markInteractiveAnsweredFor, getInteractiveAnsweredKey, setError } = useSession()
+const { showToast } = useAppToast()
+const pendingInteractive = inject('pendingInteractive', null)
 
-// Track whether interactive messages have been answered
-const interactiveAnswered = ref(false)
+const interactiveAnswered = computed(() => isInteractiveAnswered(props.message, {
+  pendingInteractive: pendingInteractive?.value ?? null,
+  answeredKey: getInteractiveAnsweredKey(currentSessionId.value),
+}))
 
 function handleInteractiveResponse(data) {
   if (interactiveAnswered.value) return
-  if (wsConnection?.value && wsConnection.value.send({ action: 'user_response', data })) {
-    interactiveAnswered.value = true
-  }
+  submitInteractiveResponse({
+    wsConnection,
+    sessionId: currentSessionId.value,
+    pendingMessage: pendingInteractive?.value ?? props.message,
+    data,
+    markAnswered: markInteractiveAnsweredFor,
+    showToast,
+    setError,
+  })
 }
 
 // User message collapse state
@@ -61,23 +75,24 @@ function handleUserMarkerClick() {
 const renderedBlocks = shallowRef([])
 
 watch(
-  () => props.message,
-  (msg) => {
+  () => [props.message?.type, props.message?.content],
+  ([, content]) => {
+    const msg = props.message
     if (!msg) { renderedBlocks.value = []; return }
 
-    const content = msg.content || {}
+    const body = content || {}
 
     if (msg.type === 'user') {
       renderedBlocks.value = [{
         type: 'user',
-        html: cachedParse(content.text || ''),
-        attachments: content.attachments || [],
+        html: cachedParse(body.text || ''),
+        attachments: body.attachments || [],
       }]
       return
     }
 
     if (msg.type === 'assistant') {
-      const blocks = content.blocks || []
+      const blocks = body.blocks || []
       renderedBlocks.value = blocks.map((block) => {
         if (block.type === 'text') {
           return { ...block, html: cachedParse(block.text || '') }
@@ -105,19 +120,19 @@ watch(
     if (msg.type === 'result') {
       renderedBlocks.value = [{
         type: 'result',
-        html: content.text ? cachedParse(content.text) : '',
+        html: body.text ? cachedParse(body.text) : '',
         meta: {
-          duration: content.duration_ms,
-          turns: content.num_turns,
-          usage: content.usage,
-          is_error: content.is_error,
+          duration: body.duration_ms,
+          turns: body.num_turns,
+          usage: body.usage,
+          is_error: body.is_error,
         },
       }]
       return
     }
 
     if (msg.type === 'tool_result') {
-      renderedBlocks.value = (content.results || []).map((r) => ({
+      renderedBlocks.value = (body.results || []).map((r) => ({
         type: 'tool_result',
         tool_use_id: r.tool_use_id,
         content: r.content,
@@ -127,34 +142,34 @@ watch(
     }
 
     if (msg.type === 'system') {
-      const subtype = content.subtype || ''
+      const subtype = body.subtype || ''
       let text = subtype
       if (subtype === 'auto_continue') {
-        text = `Auto-continuing (${content.attempt}/${content.max})`
+        text = `Auto-continuing (${body.attempt}/${body.max})`
       } else {
-        if (content.description) text += `: ${content.description}`
-        if (content.status) text += ` [${content.status}]`
-        if (content.summary) text += ` - ${content.summary}`
-        if (content.last_tool_name) text += ` (${content.last_tool_name})`
+        if (body.description) text += `: ${body.description}`
+        if (body.status) text += ` [${body.status}]`
+        if (body.summary) text += ` - ${body.summary}`
+        if (body.last_tool_name) text += ` (${body.last_tool_name})`
       }
-      renderedBlocks.value = [{ type: 'system', text: text || JSON.stringify(content) }]
+      renderedBlocks.value = [{ type: 'system', text: text || JSON.stringify(body) }]
       return
     }
 
     if (msg.type === 'interactive') {
-      if (content.interaction_type === 'user_choice') {
-        renderedBlocks.value = [{ type: 'user_choice', input: { questions: content.questions }, tool_name: content.tool_name }]
+      if (body.interaction_type === 'user_choice') {
+        renderedBlocks.value = [{ type: 'user_choice', input: { questions: body.questions }, tool_name: body.tool_name }]
         return
       }
-      if (content.interaction_type === 'permission') {
-        renderedBlocks.value = [{ type: 'permission', tool_name: content.tool_name, tool_input: content.tool_input }]
+      if (body.interaction_type === 'permission') {
+        renderedBlocks.value = [{ type: 'permission', tool_name: body.tool_name, tool_input: body.tool_input }]
         return
       }
     }
 
     renderedBlocks.value = []
   },
-  { immediate: true },
+  { immediate: true, deep: true },
 )
 
 function attachmentHref(attachment) {

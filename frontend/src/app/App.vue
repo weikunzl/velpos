@@ -16,9 +16,12 @@ import { GitManagerButton, GitManagerDialog } from '@features/git-manager'
 import { TerminalButton, TerminalDrawer } from '@features/terminal'
 import { WorkspaceButton, WorkspacePanel } from '@features/workspace'
 import { SchedulerDialog } from '@features/scheduler'
+import { useCommandPalette } from '@features/command-palette'
 import ThemeSwitcher from '@shared/ui/ThemeSwitcher.vue'
 import GlobalShortcutInterceptor from '@shared/ui/GlobalShortcutInterceptor.vue'
+import AppToast from '@shared/ui/AppToast.vue'
 import AppLogo from '@shared/ui/AppLogo.vue'
+import { useAppToast } from '@shared/lib/useAppToast'
 import { useGlobalHotkeys } from '@shared/lib/useGlobalHotkeys'
 import { useHotkeyHint } from '@shared/lib/useHotkeyHint'
 import { useViewport } from '@shared/lib/useViewport'
@@ -71,6 +74,8 @@ const {
 const { fetchStatus: fetchImStatus, fetchChannels: fetchImChannels, resetState: resetImState } = useImBinding()
 
 const { addNotification } = useNotifications()
+const { setRemoteCommands } = useCommandPalette()
+const { showToast } = useAppToast()
 const { markWorking, markDone } = useWorkingSessions()
 const { startListening: startHotkeyHintListening, stopListening: stopHotkeyHintListening } = useHotkeyHint()
 
@@ -350,6 +355,12 @@ function setupUnifiedHandler(connection, sessionId) {
       case 'info':
         break
 
+      case 'commands_updated':
+        if (isCurrent && Array.isArray(data.commands)) {
+          setRemoteCommands(data.commands)
+        }
+        break
+
       case 'message_queued':
         setQueuedFor(sessionId, true)
         if (data.prompt) {
@@ -531,10 +542,7 @@ async function onCopySession(sessionId) {
     }
   } catch (e) {
     console.error('Copy session failed:', e)
-    const targetId = currentSessionId.value || sessionId
-    if (targetId) {
-      setErrorFor(targetId, e.message || '复制会话失败')
-    }
+    showToast(e.message || '复制会话失败', 'error')
   }
 }
 
@@ -899,6 +907,7 @@ useGlobalHotkeys({
         </Transition>
       </Teleport>
     </template>
+    <AppToast />
   </div>
 </template>
 

@@ -380,13 +380,17 @@ class Session:
                 existing_input = block.get("input") if isinstance(block.get("input"), dict) else {}
                 patch_input = patch_block.get("input") if isinstance(patch_block.get("input"), dict) else {}
                 merged_name = str(patch_block.get("name") or block.get("name") or "")
-                patched_blocks.append(
-                    {
-                        **block,
-                        "name": merged_name,
-                        "input": {**existing_input, **patch_input},
-                    }
-                )
+                merged_block = {
+                    **block,
+                    "name": merged_name,
+                    "input": {**existing_input, **patch_input},
+                }
+                for key in ("output", "status", "locations"):
+                    patch_value = patch_block.get(key)
+                    if patch_value in (None, "", [], {}):
+                        continue
+                    merged_block[key] = patch_value
+                patched_blocks.append(merged_block)
                 patched = True
             else:
                 patched_blocks.append(block)

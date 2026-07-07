@@ -25,7 +25,7 @@ class ClaudeCommandGateway(CommandGatewayPort):
             return "skill"
         return "command"
 
-    async def get_commands(self, cwd: str) -> list[dict[str, Any]]:
+    async def get_commands(self, cwd: str, provider: str | None = None) -> list[dict[str, Any]]:
         logger.info("Fetching commands from Claude CLI for cwd=%s", cwd)
         options = ClaudeAgentOptions(
             permission_mode=self._permission_mode,

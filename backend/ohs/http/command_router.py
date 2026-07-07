@@ -29,8 +29,9 @@ async def list_commands(
     service: ServiceDep,
     policy_service: PolicyServiceDep,
     project_dir: str = Query(..., description="Project directory path"),
+    provider: str = Query("", description="Agent provider, e.g. claude or cursor"),
 ) -> ApiResponse[CommandListResponse]:
-    commands = await service.list_commands(project_dir)
+    commands = await service.list_commands(project_dir, provider=provider or None)
     commands = await policy_service.filter_commands(commands, project_dir)
     items = [CommandInfo(**c) for c in commands]
     return ApiResponse.success(CommandListResponse(commands=items))

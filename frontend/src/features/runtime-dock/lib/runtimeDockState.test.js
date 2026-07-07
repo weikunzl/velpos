@@ -11,6 +11,7 @@ import {
   queuedBlockMode,
   shouldHideMessageFromList,
   buildInteractiveBlock,
+  isInteractiveAnswered,
 } from './runtimeDockState.js'
 
 function testFindLastUserMessage() {
@@ -91,6 +92,18 @@ function testBuildInteractiveFromRecovery() {
   assert.equal(block.tool_name, 'Write')
 }
 
+function testIsInteractiveAnsweredHistorical() {
+  const old = { _id: 1, type: 'interactive', content: { interaction_type: 'permission' } }
+  const pending = { _id: 2, type: 'interactive', content: { interaction_type: 'permission' } }
+  assert.equal(isInteractiveAnswered(old, { pendingInteractive: pending, answeredKey: null }), true)
+  assert.equal(isInteractiveAnswered(pending, { pendingInteractive: pending, answeredKey: null }), false)
+}
+
+function testIsInteractiveAnsweredByKey() {
+  const pending = { _id: 5, type: 'interactive', content: { interaction_type: 'permission' } }
+  assert.equal(isInteractiveAnswered(pending, { pendingInteractive: pending, answeredKey: '5' }), true)
+}
+
 const tests = [
   testFindLastUserMessage,
   testFindPendingInteractive,
@@ -98,6 +111,8 @@ const tests = [
   testHideQueuedUserMessage,
   testHidePendingInteractiveUntilAnswered,
   testBuildInteractiveFromRecovery,
+  testIsInteractiveAnsweredHistorical,
+  testIsInteractiveAnsweredByKey,
 ]
 
 for (const run of tests) {

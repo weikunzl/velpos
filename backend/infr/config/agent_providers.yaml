@@ -2,7 +2,7 @@ providers:
   cursor:
     transport: stdio
     command: agent
-    args: [acp]
+    args: [acp, --approve-mcps]
     auth_method: cursor_login
     default_model: auto
     env:

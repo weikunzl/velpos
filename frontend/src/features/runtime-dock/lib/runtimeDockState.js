@@ -48,6 +48,18 @@ export function messageKey(msg) {
   return String(msg._id ?? msg.id ?? '')
 }
 
+/**
+ * Whether an interactive message no longer needs user action.
+ * Historical interactives (not the current pending one) are always resolved.
+ */
+export function isInteractiveAnswered(msg, { pendingInteractive, answeredKey } = {}) {
+  if (!msg || msg.type !== 'interactive') return false
+  const key = messageKey(msg)
+  if (answeredKey && key === answeredKey) return true
+  if (pendingInteractive && key !== messageKey(pendingInteractive)) return true
+  return false
+}
+
 export function shouldHideMessageFromList(msg, {
   queuedPrompt,
   queued,

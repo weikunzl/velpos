@@ -1,19 +1,81 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+This file provides guidance to AI coding agents (Cursor, Claude Code, etc.) when working with code in this repository.
+
+## Development Environment
+
+### Shell and Tooling
+
+- Default shell is typically **bash** or **zsh**, depending on the host.
+- Prefer **`mise`** for project dev dependencies and runtime management. Check and use repo-local `mise.toml` first when available.
+- Prefer project scripts from `package.json`, `Makefile`, `justfile`, `mise.toml`, `pyproject.toml`, `Cargo.toml`, etc.
+- Prefer repo-local tools over global installs.
+- Use `rg` / `rg --files` for search.
+- Keep changes scoped to the requested task.
+- Run focused checks/tests when practical, and report what was run.
+
+### Workspace Layout
+
+- All repos and working files are under `~/Workspace`.
+- GitHub repos are usually under `~/Workspace/github.com/<owner>/<repo>`.
+- My own GitHub repos are under `~/Workspace/github.com/Aysnine/`.
+- Temporary demos and throwaway projects belong in `~/Workspace/temp-projects`.
+- Treat every repo as git-managed. Check git status before edits, and do not overwrite or revert my unrelated changes.
+
+### Browser
+
+- Chrome has a profile named **`local`** for agent/dev use.
+- If you need Chrome, use only the `local` profile. Do not use or modify other Chrome profiles.
+
+### Secrets
+
+- For AI/agent integration development, use my shared env file only when needed:
+  `~/.config/my-api-keys-for-dev/secrets.env`
+- It contains exports such as `DEEPSEEK_API_KEY`, `DASHSCOPE_API_KEY`, and `OPENROUTER_API_KEY`.
+- Source it in the current command or shell when required.
+- Never print, log, commit, or copy secret values into code, docs, terminal output, or git history.
+
+### Terminal and Long-Running Processes
+
+- Prefer **tmux** for persistent dev workflows (optionally via iTerm2 on macOS).
+- Prefer reusing existing tmux sessions/panes for long-running commands such as dev servers, watchers, workers, test watchers, REPLs, and local services.
+- Before starting a duplicate long-running process in your own agent terminal, inspect tmux first:
+  - `tmux list-sessions`
+  - `tmux list-windows -a`
+  - `tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index} #{pane_current_path} #{pane_current_command} #{pane_title}'`
+- Read tmux output with:
+  - `tmux capture-pane -t <target> -p -S -200`
+  - Use more lines when debugging startup or build failures.
+- Send commands to an existing pane with:
+  - `tmux send-keys -t <target> '<command>' C-m`
+- Interrupt a process only when clearly appropriate:
+  - `tmux send-keys -t <target> C-c`
+- If no suitable tmux session exists, create one with a stable project-oriented name:
+  - `tmux new-session -d -s <repo-or-project-name> -c <project-root>`
+- Use clear tmux window names such as `web`, `api`, `worker`, `test`, `db`, `logs`, or `scratch`.
+- If iTerm2 is relevant, assume I may be viewing the same tmux sessions through iTerm2. Do not rely on iTerm2 GUI automation unless tmux is insufficient.
 
 ## Project Overview
 
-Velpos is a web interface for controlling Codex via the Agent SDK. Python FastAPI backend + Vue 3 frontend, communicating over REST and WebSocket.
+Velpos is a web interface for controlling Claude Code and other agent backends (including Cursor via ACP) via the Agent SDK. Python FastAPI backend + Vue 3 frontend, communicating over REST and WebSocket.
 
 ## Development Commands
 
-### Quick Start (Dev)
+### Quick Start (One Command)
 ```bash
-# 1. Copy and configure environment
+./setup.sh          # Interactive — asks dev or prod
+./setup.sh dev      # Development mode
+./setup.sh prod     # Production mode
+./setup.sh stop     # Stop services
+./setup.sh status   # Show status
+```
+
+For the full machine-readable deploy guide, see [doc/deploy-guide.md](./doc/deploy-guide.md).
+
+### Quick Start (Dev, Manual)
+```bash
+# 1. Copy and configure environment (backend/frontend read build/dev/.env via start.sh)
 cp build/dev/.env.example build/dev/.env
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
 
 # 2. Start everything (MySQL docker + backend + frontend)
 build/dev/start.sh start
@@ -30,11 +92,10 @@ build/dev/start.sh logs      # Tail backend logs
 
 ### Production (Full Docker)
 ```bash
-# 1. Configure
+# Manual alternative (setup.sh handles this automatically):
 cp build/prod/.env.example build/prod/.env
-
-# 2. Build and start
-cd build/prod && docker compose up --build -d
+# Edit build/prod/.env — set ANTHROPIC_API_KEY and MYSQL_ROOT_PASSWORD
+docker compose -f build/prod/docker-compose.yml up --build -d
 ```
 
 ### Run Services Individually
@@ -60,13 +121,11 @@ build/
 │   ├── frontend.Dockerfile
 │   ├── nginx.conf
 │   └── .env.example
-└── docker/
-    └── init-db/          # Shared MySQL init scripts
 ```
 
 ### Ports
 - Backend: 8083 (API docs at http://localhost:8083/docs)
-- Frontend: 3000 (dev) / 80 (prod, via nginx)
+- Frontend: 8911 (dev, from `build/dev/.env` / `vite.config.js`) / 80 (prod, via nginx)
 - MySQL: 3307 (dev host) / 3306 (prod internal)
 
 ### Database Migrations (Alembic)
@@ -79,7 +138,7 @@ Migrations auto-run on backend startup. Fallback `create_all` if Alembic fails.
 
 ### Required Environment Variables
 - `DATABASE_URL` — backend will not start without this (raises RuntimeError)
-- `CLAUDE_CLI_PATH` — path to Codex CLI binary
+- `CLAUDE_CLI_PATH` — path to claude CLI binary (auto-detected when in PATH)
 
 ## Backend Architecture — DDD Four-Layer
 
@@ -140,7 +199,7 @@ frontend/src/
 - **No component library** — custom CSS throughout.
 
 ## Tech Stack
-- **Backend**: Python 3.11+, FastAPI, SQLAlchemy (async), Alembic, Codex-agent-sdk, aiomysql
+- **Backend**: Python 3.11+, FastAPI, SQLAlchemy (async), Alembic, claude-agent-sdk, agent-client-protocol, aiomysql
 - **Frontend**: Vue 3 (Composition API), Vite 8, marked, highlight.js
 - **Database**: MySQL 8
 - **Package management**: uv (backend), npm (frontend)
@@ -154,11 +213,27 @@ frontend/src/
 
 ## Git Commit Workflow
 
+### Git Workflow Rules
+
+- **Repo check**: Always verify if the current directory is a Git repository. Check subdirectories as well to support multi-repo workflows.
+- **Commit style**: Mimic the repository's existing style by analyzing the last 3 commit messages (pay attention to multi-line formats).
+- **Default preference**: If no clear style exists, default to concise and efficient **Conventional Commits**.
+
+### Velpos Commit Conventions
+
 - 开发过程中必须**小步提交**：完成一个独立功能、一个独立组件、一个清晰的重构步骤，或一个可验证的测试/文档阶段后，立即准备一次提交。
 - 每次提交必须保持可验证边界：包含对应代码、能够通过的测试用例，以及与该步骤相关的 spec、plan 或调研文档更新；不要把多个无关功能混在同一提交中。
 - 提交前必须运行与本次变更范围匹配的验证命令，并确认输出；若无法运行测试，需要在最终说明中明确原因与剩余风险。
 - 提交信息应优先使用中文描述本次功能或组件目的，推荐格式：`<type>(<scope>): 中文描述`，例如 `feat(acp): 增加通用 AgentGateway 端口`。
 - 不要提交明显包含密钥、令牌、本地凭据、`.env` 实例文件或与任务无关的改动；遇到用户已有未提交改动时，只提交本次任务相关文件。
+
+## Agent Workflow Preferences
+
+- Do not use Git worktrees by default, and do not create or switch to a new branch by default. Work in the current checkout and current branch unless I explicitly ask for a worktree or branch.
+- When I mention **"handoff"**, interpret it as a request to create or use a new agent thread, not as a Git worktree, branch, or manual task transfer unless I explicitly say otherwise.
+- When I ask for a **"review cycle"**, run the workflow as: modify → review by subagent(s) → fix any findings → review again until the required clean-review threshold is reached.
+- The review-cycle count means the number of consecutive review rounds that must complete with no findings. If any review round reports a finding, stop further reviews for that round, fix the finding(s), reset the clean-review count, and start reviewing again.
+- The default review-cycle count is **1**. If I write a form such as **"review cycle 3x3"**, interpret it as 3 subagents reviewing from 3 distinct perspectives, with 3 consecutive no-finding review rounds required before the cycle is complete.
 
 ## Agent Role Workflow
 
@@ -190,3 +265,32 @@ frontend/src/
 - 工作顺序：需求角色明确验收口径 → 开发角色调研并实现 → 测试角色自动化测试与代码评审 → 需求角色验收。
 - 任一角色发现阻塞时必须说明阻塞类型：需求问题、技术问题、测试问题或环境问题。
 - 不允许跳过测试角色直接声明完成；不允许在需求未闭环时扩大实现范围。
+
+### 测试评价与缺陷分级（必须执行）
+
+所有较大功能、协议集成、UI 调试类改动，测试角色必须按**至少三个视角**设计与执行用例：
+
+1. **需求/验收视角**：Happy Path、用户可见行为、验收标准是否闭环。
+2. **协议/数据视角**：南向 payload 映射、归一化契约、持久化与 WS 增量更新是否一致。
+3. **前端/交互视角**：Debug 模式展示、展开/折叠、流式 patch 后的响应式刷新、边界与异常提示。
+
+测试场景应尽量多样，至少覆盖：正常路径、空/缺字段、延迟 patch、嵌套 payload、权限/取消、重连后回放。
+
+发现的问题必须从**三个维度**记录分析结论：
+
+| 维度 | 关注点 |
+|------|--------|
+| **功能正确性** | 数据是否丢失、映射是否正确、合并/持久化是否一致 |
+| **用户体验** | Debug/Runtime 是否可读、错误是否可理解、交互是否跟手 |
+| **可维护性** | 协议兼容层是否清晰、测试是否可重复、回归风险是否可控 |
+
+每个问题必须给出 **P0–P3** 优先级，并默认**优先修复 P0–P2**：
+
+| 级别 | 定义 | 处理策略 |
+|------|------|----------|
+| **P0** | 核心功能不可用、数据丢失、安全/权限绕过 | 必须在本轮修复并补回归测试 |
+| **P1** | 主要场景体验严重受损（如 Debug 看不到关键 tool 详情） | 必须在本轮修复或给出明确阻塞说明 |
+| **P2** | 边界场景、兼容性、可维护性缺陷 | 本轮尽量修复；来不及则写入 backlog 并说明风险 |
+| **P3** | 文案、样式、非阻塞优化 | 可延后，但需在测试报告中登记 |
+
+测试报告至少包含：场景列表、三维度分析、P0–P3 问题清单、已修复项、剩余风险与建议验证命令。

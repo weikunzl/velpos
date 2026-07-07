@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from domain.session.acl.connection_manager import ConnectionManager
 from domain.session.model.session_timeline_event import SessionTimelineEvent
 from domain.session.repository.session_timeline_event_repository import SessionTimelineEventRepository
+from domain.shared.utils import truncate_text
 
 _MAX_SEQ_RETRIES = 3
 
@@ -41,7 +42,7 @@ class SessionTimelineEventService:
                 run_id=run_id,
                 seq=seq,
                 event_type=event_type,
-                title=title,
+                title=truncate_text(title),
                 payload=payload,
                 status=status,
             )

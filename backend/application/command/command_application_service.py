@@ -13,6 +13,6 @@ class CommandApplicationService:
     def __init__(self, command_gateway: CommandGateway) -> None:
         self._command_gateway = command_gateway
 
-    async def list_commands(self, cwd: str) -> list[dict[str, Any]]:
-        logger.info("Listing commands for cwd=%s", cwd)
-        return await self._command_gateway.get_commands(cwd)
+    async def list_commands(self, cwd: str, provider: str | None = None) -> list[dict[str, Any]]:
+        logger.info("Listing commands for cwd=%s provider=%s", cwd, provider or "default")
+        return await self._command_gateway.get_commands(cwd, provider=provider)
