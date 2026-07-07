@@ -269,7 +269,7 @@ start_frontend() {
         info "Installing frontend dependencies..."
         npm install
     fi
-    nohup npm run dev -- --host 0.0.0.0 --port "$FRONTEND_PORT" > "$FRONTEND_LOG" 2>&1 &
+    nohup npm run dev -- --host 0.0.0.0 --port "$FRONTEND_PORT" --strictPort > "$FRONTEND_LOG" 2>&1 &
 
     local pid=$!
     echo "$pid" > "$FRONTEND_PID_FILE"

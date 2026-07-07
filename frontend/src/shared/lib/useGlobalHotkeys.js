@@ -22,11 +22,14 @@ function normalizeKeyCombo(event) {
     'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'
   ]
 
-  if (specialKeys.includes(event.key)) {
-    parts.push(event.key)
-  } else if (event.key.length === 1) {
+  const key = event.key
+  if (!key) return parts.join('+')
+
+  if (specialKeys.includes(key)) {
+    parts.push(key)
+  } else if (key.length === 1) {
     // Regular character key
-    parts.push(event.key.toUpperCase())
+    parts.push(key.toUpperCase())
   }
 
   return parts.join('+')
@@ -67,6 +70,9 @@ function normalizeHotkeyString(key) {
 }
 
 function handleGlobalKeydown(event) {
+  // IME composition and some synthetic events omit event.key
+  if (event.isComposing || event.key == null) return
+
   const combo = normalizeKeyCombo(event)
 
   // Find all handlers for this key combination

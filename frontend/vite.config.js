@@ -18,7 +18,8 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3231,
+    port: 8911,
+    allowedHosts: ['velpos.wekux.com'],
     proxy: {
       '/api': {
         target: `http://${backendHost}:${backendPort}`,
