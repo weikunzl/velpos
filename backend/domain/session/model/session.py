@@ -355,6 +355,100 @@ class Session:
                     return index
         return None
 
+    @staticmethod
+    def _merge_tool_use_blocks(
+        existing_block: dict[str, Any],
+        patch_block: dict[str, Any],
+    ) -> dict[str, Any]:
+        existing_input = existing_block.get("input") if isinstance(existing_block.get("input"), dict) else {}
+        patch_input = patch_block.get("input") if isinstance(patch_block.get("input"), dict) else {}
+        merged_block = {
+            **existing_block,
+            "name": str(patch_block.get("name") or existing_block.get("name") or ""),
+            "input": {**existing_input, **patch_input},
+        }
+        for key in ("output", "status", "locations"):
+            patch_value = patch_block.get(key)
+            if patch_value in (None, "", [], {}):
+                continue
+            merged_block[key] = patch_value
+        return merged_block
+
+    @classmethod
+    def _merge_assistant_messages(cls, existing: Message, incoming: Message) -> Message | None:
+        existing_blocks = existing.content.get("blocks", [])
+        incoming_blocks = incoming.content.get("blocks", [])
+        if not isinstance(existing_blocks, list) or not isinstance(incoming_blocks, list):
+            return None
+        if not incoming_blocks:
+            return None
+
+        if cls._is_text_only_assistant_content(existing.content) and cls._is_text_only_assistant_content(incoming.content):
+            merged_text = cls._assistant_text_from_content(existing.content) + cls._assistant_text_from_content(incoming.content)
+            return Message.create(
+                message_type=MessageType.ASSISTANT,
+                content={"blocks": [{"type": "text", "text": merged_text}]},
+            )
+
+        merged_blocks: list[dict[str, Any]] = [
+            dict(block) for block in existing_blocks if isinstance(block, dict)
+        ]
+        for block in incoming_blocks:
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") == "text":
+                text = str(block.get("text") or "")
+                if merged_blocks and merged_blocks[-1].get("type") == "text":
+                    merged_blocks[-1] = {
+                        **merged_blocks[-1],
+                        "text": str(merged_blocks[-1].get("text", "")) + text,
+                    }
+                else:
+                    merged_blocks.append(dict(block))
+            elif block.get("type") == "tool_use":
+                tool_id = str(block.get("id") or "")
+                replaced = False
+                if tool_id:
+                    for index, existing_block in enumerate(merged_blocks):
+                        if (
+                            existing_block.get("type") == "tool_use"
+                            and existing_block.get("id") == tool_id
+                        ):
+                            merged_blocks[index] = cls._merge_tool_use_blocks(existing_block, block)
+                            replaced = True
+                            break
+                if not replaced:
+                    merged_blocks.append(dict(block))
+            else:
+                merged_blocks.append(dict(block))
+
+        return Message.create(
+            message_type=MessageType.ASSISTANT,
+            content={"blocks": merged_blocks},
+        )
+
+    @classmethod
+    def compact_consecutive_assistant_messages(cls, messages: list[Message]) -> list[Message]:
+        """Collapse split ACP assistant chunks into one bubble per turn."""
+        compacted: list[Message] = []
+        for message in messages:
+            if (
+                message.message_type == MessageType.ASSISTANT
+                and compacted
+                and compacted[-1].message_type == MessageType.ASSISTANT
+            ):
+                merged = cls._merge_assistant_messages(compacted[-1], message)
+                if merged is not None:
+                    compacted[-1] = merged
+                    continue
+            compacted.append(message)
+        return compacted
+
+    def compact_assistant_messages_in_place(self) -> None:
+        """Persist one assistant bubble per turn for split ACP streams."""
+        self._messages = self.compact_consecutive_assistant_messages(self._messages)
+        self._updated_time = datetime.now()
+
     def _patch_tool_use_message(
         self,
         tool_use_id: str,
@@ -377,19 +471,7 @@ class Session:
                 and block.get("type") == "tool_use"
                 and block.get("id") == tool_use_id
             ):
-                existing_input = block.get("input") if isinstance(block.get("input"), dict) else {}
-                patch_input = patch_block.get("input") if isinstance(patch_block.get("input"), dict) else {}
-                merged_name = str(patch_block.get("name") or block.get("name") or "")
-                merged_block = {
-                    **block,
-                    "name": merged_name,
-                    "input": {**existing_input, **patch_input},
-                }
-                for key in ("output", "status", "locations"):
-                    patch_value = patch_block.get(key)
-                    if patch_value in (None, "", [], {}):
-                        continue
-                    merged_block[key] = patch_value
+                merged_block = self._merge_tool_use_blocks(block, patch_block)
                 patched_blocks.append(merged_block)
                 patched = True
             else:
@@ -408,10 +490,10 @@ class Session:
     def merge_or_add_message(self, message: Message) -> tuple[Message, bool, int | None]:
         """Append a message or merge into an existing assistant message.
 
-        Consecutive assistant messages that contain only text blocks are merged
-        so streaming backends (e.g. ACP ``agent_message_chunk``) persist as one
-        assistant bubble. Tool-call updates (ACP ``tool_call_update``) patch the
-        matching ``tool_use`` block in place.
+        Consecutive assistant messages are merged so streaming backends (ACP
+        ``agent_message_chunk`` and per-tool ``tool_call`` events) persist as one
+        assistant bubble per turn. Tool-call updates (ACP ``tool_call_update``)
+        patch the matching ``tool_use`` block in place.
 
         Returns:
             The stored message, whether an in-place merge happened, and the
@@ -437,19 +519,11 @@ class Session:
             message.message_type == MessageType.ASSISTANT
             and self._messages
             and self._messages[-1].message_type == MessageType.ASSISTANT
-            and self._is_text_only_assistant_content(message.content)
-            and self._is_text_only_assistant_content(self._messages[-1].content)
         ):
-            merged_text = (
-                self._assistant_text_from_content(self._messages[-1].content)
-                + self._assistant_text_from_content(message.content)
-            )
-            merged = Message.create(
-                message_type=MessageType.ASSISTANT,
-                content={"blocks": [{"type": "text", "text": merged_text}]},
-            )
-            self._messages[-1] = merged
-            return merged, True, len(self._messages) - 1
+            merged = self._merge_assistant_messages(self._messages[-1], message)
+            if merged is not None:
+                self._messages[-1] = merged
+                return merged, True, len(self._messages) - 1
 
         self.add_message(message)
         return message, False, None

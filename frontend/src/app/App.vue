@@ -340,6 +340,12 @@ function setupUnifiedHandler(connection, sessionId) {
         }
         break
 
+      case 'messages_sync':
+        if (Array.isArray(data.messages)) {
+          setMessagesFor(sessionId, data.messages, data.session)
+        }
+        break
+
       case 'error':
         if (!getCancelingFor(sessionId)) {
           setErrorFor(sessionId, data.message)

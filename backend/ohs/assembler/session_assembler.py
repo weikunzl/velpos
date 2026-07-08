@@ -72,3 +72,16 @@ class SessionAssembler:
     @staticmethod
     def message_to_dict(message: Message) -> dict[str, Any]:
         return {"type": message.message_type.value, "content": message.content}
+
+    @staticmethod
+    def messages_for_display(session: Session) -> list[Message]:
+        if session.provider != "cursor":
+            return session.messages
+        return Session.compact_consecutive_assistant_messages(session.messages)
+
+    @staticmethod
+    def messages_to_dicts(session: Session) -> list[dict[str, Any]]:
+        return [
+            SessionAssembler.message_to_dict(msg)
+            for msg in SessionAssembler.messages_for_display(session)
+        ]

@@ -169,7 +169,7 @@ class SessionDetailResponse(BaseModel):
             sdk_session_id=summary.get("sdk_session_id", ""),
             updated_time=summary["updated_time"],
             git_branch=summary.get("git_branch", ""),
-            messages=[SessionAssembler.message_to_dict(msg) for msg in session.messages],
+            messages=SessionAssembler.messages_to_dicts(session),
         )
 
 

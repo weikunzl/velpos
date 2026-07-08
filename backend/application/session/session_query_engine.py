@@ -14,6 +14,7 @@ from domain.shared.async_utils import KeyedLockPool, safe_create_task
 from application.session.command.run_query_command import RunQueryCommand
 from application.session.session_observability_recorder import SessionObservabilityRecorder
 from application.session.session_presenter import SessionPresenter
+from ohs.assembler.session_assembler import SessionAssembler
 from application.session.session_stream_consumer import SessionStreamConsumer
 from domain.session.acl.claude_agent_gateway import ClaudeAgentGateway
 from domain.session.acl.connection_manager import ConnectionManager
@@ -778,6 +779,8 @@ class SessionQueryEngine:
             async with self._queue_guard:
                 self._cancelled_sessions.discard(command.session_id)
             return
+        if session.provider == "cursor":
+            session.compact_assistant_messages_in_place()
         try:
             await self._save_session(session, commit=True)
         except Exception:
@@ -814,6 +817,14 @@ class SessionQueryEngine:
                 "session": SessionPresenter.session_to_dict(session),
             },
         )
+        if session.provider == "cursor":
+            await self._connection_manager.broadcast(
+                session.session_id,
+                {
+                    "event": "messages_sync",
+                    "messages": SessionAssembler.messages_to_dicts(session),
+                },
+            )
 
         async with self._queue_guard:
             queued = self._queued_messages.pop(command.session_id, None)

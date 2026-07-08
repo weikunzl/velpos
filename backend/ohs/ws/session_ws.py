@@ -384,7 +384,8 @@ async def websocket_endpoint(
         # a query is actively streaming. The actual running state is set by
         # run_claude_query's start_query() call.
 
-        all_messages = [SessionAssembler.message_to_dict(msg) for msg in session.messages]
+        display_messages = SessionAssembler.messages_for_display(session)
+        all_messages = [SessionAssembler.message_to_dict(msg) for msg in display_messages]
         result_count = sum(1 for msg in session.messages if msg.message_type.value == "result")
         logger.info(
             "ws connected: session=%s, messages=%d, result_messages=%d",

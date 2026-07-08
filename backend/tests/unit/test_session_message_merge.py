@@ -29,7 +29,7 @@ class TestSessionMessageMerge(unittest.TestCase):
         self.assertEqual("hello", stored.content["blocks"][0]["text"])
         self.assertEqual(1, len(session.messages))
 
-    def test_merge_or_add_message_does_not_merge_tool_use(self) -> None:
+    def test_merge_or_add_message_merges_tool_use_into_assistant_turn(self) -> None:
         session = Session.create(model="auto", provider="cursor")
         session.merge_or_add_message(
             Message.create(
@@ -52,8 +52,90 @@ class TestSessionMessageMerge(unittest.TestCase):
                 },
             )
         )
+        session.merge_or_add_message(
+            Message.create(
+                message_type=MessageType.ASSISTANT,
+                content={
+                    "blocks": [
+                        {
+                            "type": "tool_use",
+                            "id": "tool-2",
+                            "name": "grep",
+                            "input": {},
+                        }
+                    ]
+                },
+            )
+        )
 
-        self.assertEqual(2, len(session.messages))
+        self.assertEqual(1, len(session.messages))
+        blocks = session.messages[0].content["blocks"]
+        self.assertEqual(3, len(blocks))
+        self.assertEqual("text", blocks[0]["type"])
+        self.assertEqual("tool_use", blocks[1]["type"])
+        self.assertEqual("tool-2", blocks[2]["id"])
+
+    def test_compact_consecutive_assistant_messages_collapses_acp_turn(self) -> None:
+        session = Session.create(model="auto", provider="cursor")
+        for _ in range(5):
+            session.merge_or_add_message(
+                Message.create(
+                    message_type=MessageType.ASSISTANT,
+                    content={
+                        "blocks": [
+                            {
+                                "type": "tool_use",
+                                "id": f"tool-{_}",
+                                "name": "grep",
+                                "input": {},
+                            }
+                        ]
+                    },
+                )
+            )
+        session.add_message(
+            Message.create(message_type=MessageType.USER, content={"text": "next"})
+        )
+        session.merge_or_add_message(
+            Message.create(
+                message_type=MessageType.ASSISTANT,
+                content={"blocks": [{"type": "text", "text": "done"}]},
+            )
+        )
+
+        compacted = Session.compact_consecutive_assistant_messages(session.messages)
+        self.assertEqual(3, len(compacted))
+        self.assertEqual("user", compacted[1].message_type.value)
+        self.assertEqual(5, len(compacted[0].content["blocks"]))
+
+    def test_merge_or_add_message_keeps_user_boundary(self) -> None:
+        session = Session.create(model="auto", provider="cursor")
+        session.merge_or_add_message(
+            Message.create(
+                message_type=MessageType.ASSISTANT,
+                content={"blocks": [{"type": "text", "text": "before"}]},
+            )
+        )
+        session.add_message(
+            Message.create(message_type=MessageType.USER, content={"text": "hi"})
+        )
+        session.merge_or_add_message(
+            Message.create(
+                message_type=MessageType.ASSISTANT,
+                content={
+                    "blocks": [
+                        {
+                            "type": "tool_use",
+                            "id": "tool-1",
+                            "name": "read_file",
+                            "input": {},
+                        }
+                    ]
+                },
+            )
+        )
+
+        self.assertEqual(3, len(session.messages))
 
     def test_merge_or_add_message_patches_tool_use_by_id(self) -> None:
         session = Session.create(model="auto", provider="cursor")
@@ -106,8 +188,9 @@ class TestSessionMessageMerge(unittest.TestCase):
 
         self.assertTrue(merged)
         self.assertEqual(0, index)
+        self.assertEqual(1, len(session.messages))
         self.assertEqual({"path": "README.md"}, stored.content["blocks"][0]["input"])
-        self.assertEqual(2, len(session.messages))
+        self.assertEqual("tool-2", stored.content["blocks"][1]["id"])
 
     def test_merge_or_add_message_patches_tool_use_output(self) -> None:
         session = Session.create(model="auto", provider="cursor")
