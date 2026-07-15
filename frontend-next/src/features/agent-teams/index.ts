@@ -1,3 +1,7 @@
-// agent-teams — multi-agent team collaboration
-// UI: CreateTeamDialog, TeamRuntimePanel, WorkflowEditor, WorkflowNode, WorkerSessionBreadcrumb
-// API (planned): teamApi.ts
+export { CreateTeamDialog } from './ui/CreateTeamDialog'
+export { TeamRuntimePanel } from './ui/TeamRuntimePanel'
+export { WorkflowEditor } from './ui/WorkflowEditor'
+export { WorkflowNode } from './ui/WorkflowNode'
+export { WorkerSessionBreadcrumb } from './ui/WorkerSessionBreadcrumb'
+export { useTeamRuntime } from './model/useTeamRuntime'
+export type { TeamTemplate, TeamStep, TeamConfig, TeamTask } from './api/teamApi'

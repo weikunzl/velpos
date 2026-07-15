@@ -1,4 +1,6 @@
-// command-palette — slash command suggestions
-// UI: CommandPaletteButton, CommandPalettePopover
-// API (planned): commandApi.ts
-// Lib (planned): slashCommandSuggest.ts
+export { CommandPaletteButton } from './ui/CommandPaletteButton'
+export { CommandPalettePopover } from './ui/CommandPalettePopover'
+export { useCommandPalette } from './model/useCommandPalette'
+export { getSlashCommandContext, filterSlashCommandSuggestions, buildSlashCommandInput } from './lib/slashCommandSuggest'
+export type { CommandItem, CommandPolicy } from './api/commandApi'
+export type { PolicyRow } from './model/useCommandPalette'
