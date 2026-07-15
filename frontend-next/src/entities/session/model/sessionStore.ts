@@ -4,6 +4,17 @@ import { BehaviorSubject, Observable, Subject, Subscription } from 'rxjs'
 import { createWsConnection, createGlobalEventConnection } from '@/shared/api/wsClient'
 import type {
   WsEvent,
+  WsConnectedEvent,
+  WsMessagesSyncEvent,
+  WsMessageEvent,
+  WsStatusChangeEvent,
+  WsErrorEvent,
+  WsMessageQueuedEvent,
+  WsAutoContinueEvent,
+  WsRunStepEvent,
+  WsTimelineEvent,
+  WsStatusInfoEvent,
+  WsCancelRewindEvent,
   Session,
   SessionSummary,
   Message,
@@ -296,13 +307,13 @@ class SessionStore {
   private handleWsEvent(sessionId: string, data: WsEvent) {
     switch (data.event) {
       case 'connected': {
-        this.updateSessionFor(sessionId, data.session as unknown as Session)
-        if (data.messages) this.setMessagesFor(sessionId, data.messages, data.session)
-        this.setStatusFor(sessionId, data.session.status || 'idle')
-        // sync recovery state
-        const recovery = data.session.recovery
+        const ev = data as WsConnectedEvent
+        this.updateSessionFor(sessionId, ev.session as unknown as Session)
+        if (ev.messages) this.setMessagesFor(sessionId, ev.messages, ev.session)
+        this.setStatusFor(sessionId, ev.session.status || 'idle')
+        const recovery = ev.session.recovery
         const hasQueued = Boolean(recovery?.queued_command)
-        const status = data.session.status || 'idle'
+        const status = ev.session.status || 'idle'
         if (hasQueued && status === 'running') {
           this.setQueuedFor(sessionId, true)
           if (recovery?.queued_command?.prompt) {
@@ -313,33 +324,37 @@ class SessionStore {
       }
 
       case 'message': {
+        const ev = data as WsMessageEvent
         if (
           this.getCancelingFor(sessionId) &&
-          data.data?.type === 'result' &&
-          data.data?.content?.is_error
+          ev.data?.type === 'result' &&
+          ev.data?.content?.is_error
         ) {
           break
         }
-        this.addMessageTo(sessionId, data.data)
+        this.addMessageTo(sessionId, ev.data)
         break
       }
 
       case 'status_change': {
-        this.setStatusFor(sessionId, data.status)
-        this.updateSessionInList(sessionId, { status: data.status })
+        const ev = data as WsStatusChangeEvent
+        this.setStatusFor(sessionId, ev.status)
+        this.updateSessionInList(sessionId, { status: ev.status })
         break
       }
 
       case 'messages_sync': {
-        if (Array.isArray(data.messages)) {
-          this.setMessagesFor(sessionId, data.messages, data.session)
+        const ev = data as WsMessagesSyncEvent
+        if (Array.isArray(ev.messages)) {
+          this.setMessagesFor(sessionId, ev.messages, ev.session)
         }
         break
       }
 
       case 'error': {
+        const ev = data as WsErrorEvent
         if (!this.getCancelingFor(sessionId)) {
-          this.setErrorFor(sessionId, data.message)
+          this.setErrorFor(sessionId, ev.message)
         }
         break
       }
@@ -353,9 +368,10 @@ class SessionStore {
       }
 
       case 'message_queued': {
+        const ev = data as WsMessageQueuedEvent
         this.setQueuedFor(sessionId, true)
-        if (data.prompt) {
-          this.setQueuedPromptFor(sessionId, data.prompt)
+        if (ev.prompt) {
+          this.setQueuedPromptFor(sessionId, ev.prompt)
         }
         break
       }
@@ -372,14 +388,15 @@ class SessionStore {
       }
 
       case 'auto_continue': {
+        const ev = data as WsAutoContinueEvent
         this.setStatusFor(sessionId, 'running')
         this.updateSessionInList(sessionId, { status: 'running' })
         this.addMessageTo(sessionId, {
           type: 'system',
           content: {
             subtype: 'auto_continue',
-            attempt: data.attempt,
-            max: data.max,
+            attempt: ev.attempt,
+            max: ev.max,
           },
         })
         break
@@ -389,40 +406,44 @@ class SessionStore {
       case 'run_step_progress':
       case 'run_step_completed':
       case 'run_step_failed': {
-        this.upsertRunStepFor(sessionId, data.step)
+        const ev = data as WsRunStepEvent
+        this.upsertRunStepFor(sessionId, ev.step)
         break
       }
 
       case 'timeline_event': {
-        this.upsertTimelineEventFor(sessionId, data.timeline_event)
+        const ev = data as WsTimelineEvent
+        this.upsertTimelineEventFor(sessionId, ev.timeline_event)
         break
       }
 
       case 'cancel_rewind': {
+        const ev = data as WsCancelRewindEvent
         this.setCancelingFor(sessionId, false)
-        this.updateSessionFor(sessionId, data.session)
-        if (data.messages) this.setMessagesFor(sessionId, data.messages, data.session)
-        this.setStatusFor(sessionId, data.session.status || 'idle')
+        this.updateSessionFor(sessionId, ev.session)
+        if (ev.messages) this.setMessagesFor(sessionId, ev.messages, ev.session)
+        this.setStatusFor(sessionId, ev.session.status || 'idle')
         const s = this.getSessionState(sessionId)
         if (s.session) {
           s.session.waiting_for_slot = false
         }
         this.setQueuedFor(sessionId, false)
-        this.updateSessionInList(sessionId, data.session)
+        this.updateSessionInList(sessionId, ev.session)
         break
       }
 
       case 'status': {
-        const sessionUpdate = { ...data.session }
+        const ev = data as WsStatusInfoEvent
+        const sessionUpdate = { ...ev.session }
         if (!sessionUpdate.git_branch) {
           delete sessionUpdate.git_branch
         }
         this.updateSessionFor(sessionId, sessionUpdate as Session)
-        if (data.session.status === 'running' || data.session.status === 'idle') {
+        if (ev.session.status === 'running' || ev.session.status === 'idle') {
           this.updateSessionFor(sessionId, { waiting_for_slot: false })
         }
-        this.setStatusFor(sessionId, data.session.status || 'idle')
-        this.updateSessionInList(sessionId, data.session)
+        this.setStatusFor(sessionId, ev.session.status || 'idle')
+        this.updateSessionInList(sessionId, ev.session)
         break
       }
 

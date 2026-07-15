@@ -12,6 +12,7 @@ export interface ScheduleTask {
   delete_on_success?: boolean
   last_run_at?: string
   next_run_at?: string
+  runs?: Array<{ status: string; result_session_id?: string }>
 }
 
 export function listSchedulesApi(): Promise<{ tasks: ScheduleTask[] }> {

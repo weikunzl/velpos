@@ -1,30 +1,174 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
-import { useSessions } from '@/entities/session/api/useSessionQuery'
-import { useProjects } from '@/entities/project/api/useProjectQuery'
-import { useSessionContext, useCurrentSession } from '@/entities/session'
-import { sessionStore } from '@/entities/session'
+import { useEffect, useState, useCallback } from 'react'
+import { useSessions, useCreateSession, useDeleteSession, useRenameSession, useBatchDeleteSessions } from '@/entities/session/api/useSessionQuery'
+import { useProjects, useCreateProject, useDeleteProject, useReorderProjects } from '@/entities/project/api/useProjectQuery'
+import { useSessionContext, useCurrentSession, useSessionState, sessionStore } from '@/entities/session'
+import { SessionSidebar } from '@/features/session-list'
+import { MessageList } from '@/features/message-display'
+import { MessageInput } from '@/features/send-message'
+import { RuntimeActionDock } from '@/features/runtime-dock'
+import { HeaderToolbar } from '@/features/header-toolbar'
+import { SettingsDialog } from '@/features/settings'
+import { TerminalDrawer } from '@/features/terminal'
+import { GitManagerDialog } from '@/features/git-manager'
+import { WorkspacePanel } from '@/features/workspace'
+import { useGlobalHotkeys } from '@/shared/lib/useGlobalHotkeys'
+import { AppToast, useToast } from '@/shared/ui/AppToast'
 
 export default function Home() {
-  const { data: sessions, isLoading } = useSessions()
-  useProjects()
+  const { data: sessionsData, isLoading } = useSessions()
+  const { data: projectsData } = useProjects()
+
   const { currentSessionId, setCurrentSessionId, sessions: sessionList } = useSessionContext()
   const currentSession = useCurrentSession()
 
+  const createSession = useCreateSession()
+  const deleteSession = useDeleteSession()
+  const renameSession = useRenameSession()
+  const batchDeleteSessions = useBatchDeleteSessions()
+  const createProject = useCreateProject()
+  const deleteProject = useDeleteProject()
+  const reorderProjects = useReorderProjects()
+
+  const projects = projectsData || []
+
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [scheduleCounts, setScheduleCounts] = useState<Record<string, number>>({})
+  const [settingsVisible, setSettingsVisible] = useState(false)
+  const [terminalVisible, setTerminalVisible] = useState(false)
+  const [workspaceVisible, setWorkspaceVisible] = useState(false)
+  const [gitManagerVisible, setGitManagerVisible] = useState(false)
+  const [notificationsVisible, setNotificationsVisible] = useState(false)
+  const [workingSessionsVisible, setWorkingSessionsVisible] = useState(false)
+  const { toast, show: showToast, dismiss: dismissToast } = useToast()
+
+  const handleHotkeyAction = useCallback(
+    (action: { type: string }) => {
+      switch (action.type) {
+        case 'toggle_settings':
+          setSettingsVisible((v) => !v)
+          break
+        case 'toggle_sidebar':
+          setSidebarCollapsed((v) => !v)
+          break
+        case 'toggle_terminal':
+          setTerminalVisible((v) => !v)
+          break
+        case 'toggle_workspace':
+          setWorkspaceVisible((v) => !v)
+          break
+        case 'toggle_notifications':
+          setNotificationsVisible((v) => !v)
+          break
+        case 'escape': {
+          if (settingsVisible) setSettingsVisible(false)
+          else if (terminalVisible) setTerminalVisible(false)
+          else if (workspaceVisible) setWorkspaceVisible(false)
+          else if (gitManagerVisible) setGitManagerVisible(false)
+          else if (notificationsVisible) setNotificationsVisible(false)
+          else if (workingSessionsVisible) setWorkingSessionsVisible(false)
+          break
+        }
+        case 'previous_session': {
+          const idx = sessionList.findIndex((s) => s.session_id === currentSessionId)
+          if (idx > 0) setCurrentSessionId(sessionList[idx - 1].session_id)
+          break
+        }
+        case 'next_session': {
+          const idx = sessionList.findIndex((s) => s.session_id === currentSessionId)
+          if (idx < sessionList.length - 1) setCurrentSessionId(sessionList[idx + 1].session_id)
+          break
+        }
+      }
+    },
+    [
+      currentSessionId, sessionList, setCurrentSessionId,
+      settingsVisible, terminalVisible, workspaceVisible, gitManagerVisible,
+      notificationsVisible, workingSessionsVisible,
+    ],
+  )
+
+  const anyDialogOpen = settingsVisible || terminalVisible || workspaceVisible
+    || gitManagerVisible || notificationsVisible || workingSessionsVisible
+
+  useGlobalHotkeys({ onAction: handleHotkeyAction, dialogOpen: anyDialogOpen })
+
+  const handleCreateSession = useCallback(async () => {
+    try {
+      const result = await createSession.mutateAsync({})
+      setCurrentSessionId(result.session_id)
+    } catch { /* empty */ }
+  }, [createSession, setCurrentSessionId])
+
+  const handleCreateInProject = useCallback(async (projectId: string) => {
+    try {
+      const result = await createSession.mutateAsync({ projectId })
+      setCurrentSessionId(result.session_id)
+    } catch { /* empty */ }
+  }, [createSession, setCurrentSessionId])
+
+  const handleDeleteSession = useCallback((id: string) => {
+    deleteSession.mutate({ sessionId: id })
+    sessionStore.removeState(id)
+    sessionStore.forceCloseConnection(id)
+  }, [deleteSession])
+
+  const handleRenameSession = useCallback((id: string, name: string) => {
+    renameSession.mutate({ sessionId: id, name })
+  }, [renameSession])
+
+  const handleBatchDelete = useCallback((ids: string[]) => {
+    batchDeleteSessions.mutate(ids)
+    for (const id of ids) {
+      sessionStore.removeState(id)
+      sessionStore.forceCloseConnection(id)
+    }
+  }, [batchDeleteSessions])
+
+  const handleCopySession = useCallback(async (sessionId: string) => {
+    try {
+      const result = await createSession.mutateAsync({
+        name: `${sessionList.find((s) => s.session_id === sessionId)?.name || ''} (copy)`,
+      })
+      setCurrentSessionId(result.session_id)
+    } catch { /* empty */ }
+  }, [createSession, sessionList, setCurrentSessionId])
+
+  const handleDeleteProject = useCallback((projectId: string) => {
+    const projectSessions = sessionList.filter((s) => s.project_id === projectId)
+    for (const s of projectSessions) {
+      sessionStore.removeState(s.session_id)
+      sessionStore.forceCloseConnection(s.session_id)
+    }
+    deleteProject.mutate(projectId)
+  }, [deleteProject, sessionList])
+
+  const handleOpenScheduler = useCallback((_projectId: string) => {
+    // TODO: implement scheduler dialog
+  }, [])
+
   // Sync session list to store
   useEffect(() => {
-    if (sessions) {
-      sessionStore.setSessions(sessions)
+    if (sessionsData) {
+      sessionStore.setSessions(sessionsData)
     }
-  }, [sessions])
+  }, [sessionsData])
 
   // Auto-select first session on load
   useEffect(() => {
-    if (sessions && sessions.length > 0 && !currentSessionId) {
-      setCurrentSessionId(sessions[0].session_id)
+    if (sessionsData && sessionsData.length > 0 && !currentSessionId) {
+      const lastId = localStorage.getItem('pf_last_session_id')
+      const target = lastId ? sessionsData.find((s) => s.session_id === lastId) : undefined
+      setCurrentSessionId(target?.session_id || sessionsData[0].session_id)
     }
-  }, [sessions, currentSessionId, setCurrentSessionId])
+  }, [sessionsData, currentSessionId, setCurrentSessionId])
+
+  useEffect(() => {
+    if (currentSessionId) {
+      localStorage.setItem('pf_last_session_id', currentSessionId)
+    }
+  }, [currentSessionId])
 
   // Init global events
   useEffect(() => {
@@ -74,54 +218,60 @@ export default function Home() {
 
   return (
     <div className="app-shell">
-      {/* Header */}
       <header className="app-header">
         <div className="header-left">
+          <button
+            className="header-menu-btn"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            aria-label="Toggle menu"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
           <AppLogo />
         </div>
         <div className="header-right">
-          <span className="text-sm text-text-muted">
-            {currentSession?.session?.name || 'No session selected'}
+          <HeaderToolbar
+            onToggleSettings={() => setSettingsVisible(!settingsVisible)}
+            onToggleTerminal={() => setTerminalVisible(!terminalVisible)}
+            onToggleWorkspace={() => setWorkspaceVisible(!workspaceVisible)}
+            onToggleGitManager={() => setGitManagerVisible(!gitManagerVisible)}
+            onToggleNotifications={() => setNotificationsVisible(!notificationsVisible)}
+            onToggleWorkingSessions={() => setWorkingSessionsVisible(!workingSessionsVisible)}
+          />
+          <span className="header-session-name">
+            {currentSession?.session?.name || ''}
           </span>
         </div>
       </header>
 
-      {/* Body */}
       <div className="app-body">
-        {/* Sidebar: will be replaced with SessionSidebar component */}
-        <aside className="main-sidebar">
-          <div className="p-4 border-b border-glass-border">
-            <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider">
-              Sessions
-            </h2>
-          </div>
-          <div className="flex-1 overflow-y-auto p-2">
-            {sessionList.map((s) => (
-              <button
-                key={s.session_id}
-                onClick={() => setCurrentSessionId(s.session_id)}
-                className={`w-full text-left px-3 py-2 rounded-md text-sm mb-1 transition-colors ${
-                  s.session_id === currentSessionId
-                    ? 'bg-layer-active text-accent'
-                    : 'text-text-secondary hover:bg-bg-hover'
-                }`}
-              >
-                <div className="font-medium truncate">{s.name || 'Unnamed'}</div>
-                <div className="text-xs text-text-muted mt-0.5">{s.status}</div>
-              </button>
-            ))}
-            {sessionList.length === 0 && (
-              <div className="text-sm text-text-muted px-3 py-8 text-center">
-                No sessions yet
-              </div>
-            )}
-          </div>
-        </aside>
+        <SessionSidebar
+          projects={projects}
+          sessions={sessionList}
+          currentSessionId={currentSessionId}
+          loading={isLoading}
+          scheduleCounts={scheduleCounts}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+          onSelect={setCurrentSessionId}
+          onCreate={handleCreateSession}
+          onDelete={handleDeleteSession}
+          onRename={handleRenameSession}
+          onCopy={handleCopySession}
+          onBatchDelete={handleBatchDelete}
+          onCreateInProject={handleCreateInProject}
+          onDeleteProject={handleDeleteProject}
+          onOpenScheduler={handleOpenScheduler}
+          onReorderProjects={(ids) => reorderProjects.mutate(ids)}
+        />
 
-        {/* Main content */}
         <main className="app-main">
           {currentSessionId ? (
-            <ChatPanelPlaceholder sessionId={currentSessionId} />
+            <ChatPanel sessionId={currentSessionId} />
           ) : (
             <div className="empty-state">
               <div className="empty-icon">
@@ -134,67 +284,40 @@ export default function Home() {
           )}
         </main>
       </div>
+
+      <AppToast toast={toast} onDismiss={dismissToast} />
+      <SettingsDialog open={settingsVisible} onClose={() => setSettingsVisible(false)} />
+      <GitManagerDialog open={gitManagerVisible} onClose={() => setGitManagerVisible(false)} />
+      <WorkspacePanel
+        visible={workspaceVisible}
+        project={currentSession?.session?.project_id ? { id: currentSession.session.project_id, dir_path: currentSession.session.project_dir || '' } : null}
+        onClose={() => setWorkspaceVisible(false)}
+      />
+      <TerminalDrawer
+        open={terminalVisible}
+        onClose={() => setTerminalVisible(false)}
+        projectDir={currentSession?.session?.project_dir || ''}
+        gitBranch={currentSession?.session?.git_branch || ''}
+      />
     </div>
   )
 }
 
-/** Placeholder for the ChatPanelPage, to be replaced with full implementation */
-function ChatPanelPlaceholder({ sessionId }: { sessionId: string }) {
-  const currentSession = useCurrentSession()
+function ChatPanel({ sessionId }: { sessionId: string }) {
+  const state = useSessionState(sessionId)
+
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto p-6">
-        {currentSession?.messages.length === 0 && (
-          <div className="flex items-center justify-center h-full text-text-muted text-sm">
-            Start a conversation by sending a message below.
-          </div>
-        )}
-        {currentSession?.messages.map((msg, i) => (
-          <div key={msg._id ?? i} className={`mb-4 max-w-[65%] ${msg.type === 'result' || msg.type === 'text' ? 'ml-auto' : ''}`}>
-            <div
-              className={`px-4 py-3 rounded-lg text-sm ${
-                msg.type === 'result' || msg.type === 'text'
-                  ? 'bg-accent-dim text-text-primary'
-                  : 'bg-bg-secondary text-text-primary'
-              }`}
-            >
-              {JSON.stringify(msg.content).slice(0, 200)}
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="border-t border-glass-border p-4">
-        <div className="flex gap-2">
-          <input
-            type="text"
-            placeholder="Type a message..."
-            className="flex-1 bg-bg-input border border-border rounded-lg px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-accent"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                const input = e.target as HTMLInputElement
-                if (input.value.trim()) {
-                  const ws = sessionStore.getWsConnection(sessionId)
-                  if (ws) {
-                    ws.send({
-                      action: 'send_prompt',
-                      prompt: input.value.trim(),
-                    })
-                  }
-                  input.value = ''
-                }
-              }
-            }}
-          />
-          <button
-            className="bg-accent text-text-on-accent px-4 py-2 rounded-lg text-sm font-medium hover:bg-accent-hover transition-colors"
-            onClick={() => {
-              // TODO: implement send
-            }}
-          >
-            Send
-          </button>
-        </div>
+      <MessageList
+        messages={state?.messages || []}
+        status={state?.status || 'disconnected'}
+      />
+      <RuntimeActionDock sessionId={sessionId} state={state} />
+      <div className="send-message-area">
+        <MessageInput
+          sessionId={sessionId}
+          disabled={state?.status === 'disconnected' || state?.status === 'error'}
+        />
       </div>
     </div>
   )

@@ -13,7 +13,7 @@ const nextConfig: NextConfig = {
       },
       {
         source: '/ws/:path*',
-        destination: `ws://${backendHost}:${backendPort}/ws/:path*`,
+        destination: `http://${backendHost}:${backendPort}/ws/:path*`,
       },
     ]
   },
