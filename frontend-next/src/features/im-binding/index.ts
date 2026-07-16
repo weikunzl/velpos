@@ -1,1 +1,6 @@
 export { useImBinding } from './model/useImBinding'
+export { ImButton } from './ui/ImButton'
+export { ImDialog } from './ui/ImDialog'
+export { ChannelPicker } from './ui/ChannelPicker'
+export { ChannelInitDialog } from './ui/ChannelInitDialog'
+export { PromptBinder } from './ui/PromptBinder'

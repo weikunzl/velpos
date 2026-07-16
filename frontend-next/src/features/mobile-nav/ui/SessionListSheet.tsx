@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import type { Session } from '@/shared/types/api'
+import type { SessionSummary } from '@/shared/types/api'
 import { SessionListSwipeItem } from './SessionListSwipeItem'
 
 interface Props {
   project: { name?: string; agents?: { current?: unknown } } | null
-  sessions: Session[]
+  sessions: SessionSummary[]
   currentSessionId: string | null
-  onSelect: (session: Session) => void
+  onSelect: (session: SessionSummary) => void
   onBack: () => void
   onClose: () => void
   onNewSession: () => void

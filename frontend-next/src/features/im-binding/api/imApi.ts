@@ -15,8 +15,15 @@ export interface BindingState {
   binding_status: string
   channel_type?: string
   channel_id?: string
-  ui_data?: { mode?: string }
+  channel_address?: string
+  im_user_id?: string
+  ui_data?: { mode?: string; prompt?: string; description?: string; qr_code_data?: string }
   action?: string
+  display_name?: string
+  init_mode?: string
+  init_fields?: string[]
+  description?: string
+  init_status?: string
 }
 
 export function getChannels(): Promise<ImChannel[]> {

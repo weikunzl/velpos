@@ -19,6 +19,7 @@ interface SessionSidebarProps {
   onCopy: (id: string) => void
   onBatchDelete: (ids: string[]) => void
   onCreateInProject: (projectId: string) => void
+  onCreateProject: () => void
   onDeleteProject: (projectId: string) => void
   onOpenScheduler: (projectId: string) => void
   onReorderProjects: (ids: string[]) => void
@@ -39,6 +40,7 @@ export function SessionSidebar({
   onCopy,
   onBatchDelete,
   onCreateInProject,
+  onCreateProject,
   onDeleteProject,
   onOpenScheduler,
 }: SessionSidebarProps) {
@@ -395,6 +397,16 @@ export function SessionSidebar({
             {projects.map((p) => renderProjectGroup(p.id, p))}
           </>
         )}
+      </div>
+
+      {/* New Project button */}
+      <div className="sidebar-footer">
+        <button className="new-project-btn" onClick={onCreateProject}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          New Project
+        </button>
       </div>
 
       {/* Collapse button */}

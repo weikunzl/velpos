@@ -5,6 +5,8 @@ export interface EvolutionLesson {
   title?: string
   content: string
   enabled?: boolean
+  type?: string
+  source_session_id?: string
 }
 
 export interface EvolutionProposal {

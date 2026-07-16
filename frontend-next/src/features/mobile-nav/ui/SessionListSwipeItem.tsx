@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
-import type { Session } from '@/shared/types/api'
+import type { SessionSummary } from '@/shared/types/api'
 
 const COPY_WIDTH = 72
 const DELETE_WIDTH = 72
@@ -9,10 +9,10 @@ const BOTH_ACTION_WIDTH = COPY_WIDTH + DELETE_WIDTH
 const OPEN_THRESHOLD = 36
 
 interface Props {
-  session: Session
+  session: SessionSummary
   active?: boolean
   openSwipeId?: string | null
-  onSelect: (session: Session) => void
+  onSelect: (session: SessionSummary) => void
   onDelete: (sessionId: string) => void
   onCopy: (sessionId: string) => void
   onSwipeOpen: (sessionId: string) => void
@@ -39,7 +39,7 @@ export function SessionListSwipeItem({
   const lockAxis = useRef<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const isClaudeCode = (session as Session & { source?: string }).source === 'claude-code'
+  const isClaudeCode = (session as SessionSummary & { source?: string }).source === 'claude-code'
   const canCopy = !isClaudeCode
   const canDelete = !active
 
@@ -53,13 +53,13 @@ export function SessionListSwipeItem({
   const isOpen = actionWidth > 0 && renderOffset <= -actionWidth / 2
   const isRaised = isDragging || isOpen
 
-  function statusColor(s: Session) {
+  function statusColor(s: SessionSummary) {
     if (s.status === 'running') return 'running'
     if (s.status === 'waiting') return 'waiting'
     return ''
   }
 
-  function sessionLabel(s: Session) {
+  function sessionLabel(s: SessionSummary) {
     if (s.status === 'running') return '运行中'
     if (s.status === 'waiting') return '等待输入'
     return ''
@@ -200,9 +200,9 @@ export function SessionListSwipeItem({
             </span>
           )}
         </div>
-        {(session as Session & { created_at?: string }).created_at && (
+        {session.created_at && (
           <span className="sl-swipe-time">
-            {(session as Session & { created_at?: string }).created_at}
+            {session.created_at}
           </span>
         )}
       </div>

@@ -2,17 +2,17 @@
 
 import { useState, useCallback, useMemo } from 'react'
 import { useProjects } from '@/entities/project/api/useProjectQuery'
-import type { Session, Project } from '@/shared/types/api'
+import type { SessionSummary, Project } from '@/shared/types/api'
 import { ProjectPickerSheet } from './ProjectPickerSheet'
 import { SessionListSheet } from './SessionListSheet'
 
 interface Props {
   visible: boolean
-  sessions: Session[]
+  sessions: SessionSummary[]
   currentSessionId: string | null
   sidebarMode: string
   onVisibleChange: (v: boolean) => void
-  onSessionSelect: (session: Session) => void
+  onSessionSelect: (session: SessionSummary) => void
   onNewProject: () => void
   onNewSession: (projectId: string) => void
   onDeleteSession: (sessionId: string) => void
@@ -60,7 +60,7 @@ export function MobileNavStack({
   }, [])
 
   const onSessionSelectHandler = useCallback(
-    (session: Session) => {
+    (session: SessionSummary) => {
       onSessionSelect(session)
       close()
     },

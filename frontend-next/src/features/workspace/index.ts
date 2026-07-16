@@ -1,3 +1,7 @@
 export { useWorkspace } from './model/useWorkspace'
 export type { UseWorkspaceReturn } from './model/useWorkspace'
 export { default as WorkspacePanel } from './ui/WorkspacePanel'
+export { WorkspaceButton } from './ui/WorkspaceButton'
+export { ImagePreview } from './ui/ImagePreview'
+export { PdfPreview } from './ui/PdfPreview'
+export { ExcelPreview } from './ui/ExcelPreview'

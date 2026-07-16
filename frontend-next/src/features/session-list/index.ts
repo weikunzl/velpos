@@ -1,1 +1,6 @@
 export { SessionSidebar } from './ui/SessionSidebar'
+export { SessionListItem } from './ui/SessionListItem'
+export { CreateSessionDialog } from './ui/CreateSessionDialog'
+export { NewProjectDialog } from './ui/NewProjectDialog'
+export { useSessionList } from './model/useSessionList'
+export { listClaudeSessions, deleteClaudeSession } from './api/claudeSessionApi'
