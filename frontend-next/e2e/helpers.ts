@@ -120,6 +120,10 @@ function ok<T>(data: T): string {
   return JSON.stringify(resp)
 }
 
+function jsonHeaders() {
+  return { 'content-type': 'application/json' }
+}
+
 /** Wrap error in ApiResponse with non-zero code. */
 function fail(message: string, code = 1): string {
   const resp: ApiResponse<null> = { code, message, data: null }
@@ -131,10 +135,15 @@ function fail(message: string, code = 1): string {
  * Call this in `test.beforeEach` or at the top of each test group.
  */
 export async function mockApiRoutes(page: Page) {
+  // Catch-all first so later, more-specific routes take precedence (LIFO matching).
+  await page.route('**/api/**', async (route: Route) => {
+    await route.fulfill({ headers: jsonHeaders(), body: ok(null) })
+  })
+
   // ── Sessions ──
   await page.route('**/api/sessions', async (route: Route) => {
     if (route.request().method() === 'GET') {
-      await route.fulfill({ body: ok({ sessions: MOCK_SESSIONS }) })
+      await route.fulfill({ headers: jsonHeaders(), body: ok({ sessions: MOCK_SESSIONS }) })
     } else if (route.request().method() === 'POST') {
       const body = route.request().postDataJSON?.() || {}
       const newSession: Session = {
@@ -149,9 +158,9 @@ export async function mockApiRoutes(page: Page) {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }
-      await route.fulfill({ body: ok(newSession) })
+      await route.fulfill({ headers: jsonHeaders(), body: ok(newSession) })
     } else {
-      await route.fulfill({ status: 405 })
+      await route.fulfill({ headers: jsonHeaders(), status: 405  })
     }
   })
 
@@ -161,57 +170,57 @@ export async function mockApiRoutes(page: Page) {
     const method = route.request().method()
 
     if (method === 'DELETE') {
-      await route.fulfill({ body: ok(null) })
+      await route.fulfill({ headers: jsonHeaders(), body: ok(null)  })
     } else if (method === 'PATCH') {
-      await route.fulfill({ body: ok(null) })
+      await route.fulfill({ headers: jsonHeaders(), body: ok(null)  })
     } else if (method === 'GET') {
       const sessionId = url.split('/').pop() || ''
       const summary = MOCK_SESSIONS.find((s) => s.session_id === sessionId)
       if (summary) {
         const full: Session = { ...summary, model: summary.model || 'claude-opus-4-6', permission_mode: summary.permission_mode || 'acceptEdits' }
-        await route.fulfill({ body: ok(full) })
+        await route.fulfill({ headers: jsonHeaders(), body: ok(full)  })
       } else {
-        await route.fulfill({ status: 404, body: fail('Session not found') })
+        await route.fulfill({ headers: jsonHeaders(), status: 404, body: fail('Session not found')  })
       }
     } else {
-      await route.fulfill({ status: 405 })
+      await route.fulfill({ headers: jsonHeaders(), status: 405  })
     }
   })
 
   // ── Session: branches ──
   await page.route('**/api/sessions/*/branches', async (route: Route) => {
     if (route.request().method() === 'GET') {
-      await route.fulfill({ body: ok([]) })
+      await route.fulfill({ headers: jsonHeaders(), body: ok([])  })
     } else if (route.request().method() === 'POST') {
-      await route.fulfill({ body: ok({ session_id: 'branch-new', name: 'Branch', status: 'idle', provider: 'claude', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }) })
+      await route.fulfill({ headers: jsonHeaders(), body: ok({ session_id: 'branch-new', name: 'Branch', status: 'idle', provider: 'claude', created_at: new Date().toISOString(), updated_at: new Date().toISOString()  }) })
     } else {
-      await route.fulfill({ status: 405 })
+      await route.fulfill({ headers: jsonHeaders(), status: 405  })
     }
   })
 
   // ── Session: compare ──
   await page.route('**/api/sessions/*/compare*', async (route: Route) => {
-    await route.fulfill({ body: ok({ message_diff: [], git_diff_summary: '' }) })
+    await route.fulfill({ headers: jsonHeaders(), body: ok({ message_diff: [], git_diff_summary: ''  }) })
   })
 
   // ── Session: clear-context ──
   await page.route('**/api/sessions/*/clear-context', async (route: Route) => {
-    await route.fulfill({ body: ok(null) })
+    await route.fulfill({ headers: jsonHeaders(), body: ok(null)  })
   })
 
   // ── Session: compact ──
   await page.route('**/api/sessions/*/compact', async (route: Route) => {
-    await route.fulfill({ body: ok(null) })
+    await route.fulfill({ headers: jsonHeaders(), body: ok(null)  })
   })
 
   // ── Session converge ──
   await page.route('**/api/sessions/*/branches/converge', async (route: Route) => {
-    await route.fulfill({ body: ok(null) })
+    await route.fulfill({ headers: jsonHeaders(), body: ok(null)  })
   })
 
   // ── Session batch delete ──
   await page.route('**/api/sessions/batch-delete', async (route: Route) => {
-    await route.fulfill({ body: ok(null) })
+    await route.fulfill({ headers: jsonHeaders(), body: ok(null)  })
   })
 
   // ── Session models ──
@@ -228,7 +237,7 @@ export async function mockApiRoutes(page: Page) {
   // ── Projects ──
   await page.route('**/api/projects', async (route: Route) => {
     if (route.request().method() === 'GET') {
-      await route.fulfill({ body: ok(MOCK_PROJECTS) })
+      await route.fulfill({ headers: jsonHeaders(), body: ok(MOCK_PROJECTS)  })
     } else if (route.request().method() === 'POST') {
       const body = route.request().postDataJSON?.() || {}
       const newProject: Project = {
@@ -236,90 +245,80 @@ export async function mockApiRoutes(page: Page) {
         name: body.name || 'New Project',
         path: body.path || '/tmp/new-project',
       }
-      await route.fulfill({ body: ok(newProject) })
+      await route.fulfill({ headers: jsonHeaders(), body: ok(newProject)  })
     } else {
-      await route.fulfill({ status: 405 })
+      await route.fulfill({ headers: jsonHeaders(), status: 405  })
     }
   })
 
   // ── Single project ──
   await page.route('**/api/projects/*', async (route: Route) => {
     if (route.request().method() === 'DELETE') {
-      await route.fulfill({ body: ok(null) })
+      await route.fulfill({ headers: jsonHeaders(), body: ok(null)  })
     } else if (route.request().method() === 'PATCH') {
-      await route.fulfill({ body: ok(null) })
+      await route.fulfill({ headers: jsonHeaders(), body: ok(null)  })
     } else {
-      await route.fulfill({ status: 405 })
+      await route.fulfill({ headers: jsonHeaders(), status: 405  })
     }
   })
 
   // ── Projects reorder ──
   await page.route('**/api/projects/reorder', async (route: Route) => {
-    await route.fulfill({ body: ok(null) })
+    await route.fulfill({ headers: jsonHeaders(), body: ok(null)  })
   })
 
   // ── Settings ──
   await page.route('**/api/settings', async (route: Route) => {
     if (route.request().method() === 'GET') {
-      await route.fulfill({ body: ok(MOCK_SETTINGS) })
+      await route.fulfill({ headers: jsonHeaders(), body: ok(MOCK_SETTINGS)  })
     } else if (route.request().method() === 'PUT') {
-      await route.fulfill({ body: ok(null) })
+      await route.fulfill({ headers: jsonHeaders(), body: ok(null)  })
     } else {
-      await route.fulfill({ status: 405 })
+      await route.fulfill({ headers: jsonHeaders(), status: 405  })
     }
   })
 
   // ── Channel profiles ──
   await page.route('**/api/im/channel-profiles*', async (route: Route) => {
     if (route.request().method() === 'GET') {
-      await route.fulfill({ body: ok(MOCK_CHANNEL_PROFILES) })
+      await route.fulfill({ headers: jsonHeaders(), body: ok(MOCK_CHANNEL_PROFILES)  })
     } else if (route.request().method() === 'POST') {
-      await route.fulfill({ body: ok({ id: 'cp-new', ...route.request().postDataJSON?.() }) })
+      await route.fulfill({ headers: jsonHeaders(), body: ok({ id: 'cp-new', ...route.request().postDataJSON?.()  }) })
     } else {
-      await route.fulfill({ status: 405 })
+      await route.fulfill({ headers: jsonHeaders(), status: 405  })
     }
   })
 
   await page.route('**/api/im/channel-profiles/*/activate', async (route: Route) => {
-    await route.fulfill({ body: ok(null) })
+    await route.fulfill({ headers: jsonHeaders(), body: ok(null)  })
   })
 
   await page.route('**/api/im/channel-profiles/*', async (route: Route) => {
     if (route.request().method() === 'DELETE') {
-      await route.fulfill({ body: ok(null) })
+      await route.fulfill({ headers: jsonHeaders(), body: ok(null)  })
     } else if (route.request().method() === 'PUT') {
-      await route.fulfill({ body: ok(null) })
+      await route.fulfill({ headers: jsonHeaders(), body: ok(null)  })
     } else {
-      await route.fulfill({ status: 405 })
+      await route.fulfill({ headers: jsonHeaders(), status: 405  })
     }
   })
 
   // ── Plugin list ──
   await page.route('**/api/plugins*', async (route: Route) => {
-    await route.fulfill({ body: ok([]) })
+    await route.fulfill({ headers: jsonHeaders(), body: ok([])  })
   })
 
   // ── Workspace / git ──
   await page.route('**/api/workspace/**', async (route: Route) => {
-    await route.fulfill({ body: ok({ entries: [], recent_changes: [] }) })
+    await route.fulfill({ headers: jsonHeaders(), body: ok({ entries: [], recent_changes: []  }) })
   })
 
   await page.route('**/api/git/**', async (route: Route) => {
-    await route.fulfill({ body: ok({}) })
+    await route.fulfill({ headers: jsonHeaders(), body: ok({}) })
   })
 
-  // ── Catch-all for any unmocked API endpoint ──
-  await page.route('**/api/**', async (route: Route) => {
-    // Only catch if not already handled by more specific routes
-    if (route.request().url().includes('/api/')) {
-      await route.fulfill({ body: ok(null) })
-    }
-  })
-
-  // ── Intercept WebSocket and auto-accept / provide mock events ──
+  // ── Intercept WebSocket ──
   await page.route('**/ws/**', async (route: Route) => {
-    // For WS, we can't mock via route interception directly.
-    // Instead we provide a fallback that sends a minimal connected event.
     route.abort()
   })
 }

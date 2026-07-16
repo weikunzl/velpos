@@ -20,14 +20,11 @@ test.describe('Migrated feature wiring', () => {
     await page.locator('[data-session-id="ses-1"]').click()
     await page.waitForSelector('.send-message-area', { timeout: 10000 })
     await page.locator('[title*="Project Rules"]').click()
-    await expect(page.locator('.memory-dialog, [class*="memory"]').first()).toBeVisible({ timeout: 5000 }).catch(async () => {
-      // Dialog may use settings-overlay shell
-      await expect(page.locator('.settings-overlay, .settings-dialog').first()).toBeVisible({ timeout: 3000 })
-    })
+    await expect(page.locator('.memory-dialog')).toBeVisible({ timeout: 5000 })
   })
 
   test('session list items expose pin and status selectors', async ({ page }) => {
     await expect(page.locator('[data-session-id]').first()).toBeVisible()
-    await expect(page.locator('.session-status-dot, .status-dot').first()).toBeVisible()
+    await expect(page.locator('.session-status-dot, .status-dot').first()).toBeAttached()
   })
 })

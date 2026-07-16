@@ -280,15 +280,20 @@
 - [ ] 或改为 3 按钮 radio group（与 Vue 一致）
 
 #### P2d: Sidebar 功能补齐
-- [ ] 评估是否将 SessionSidebar inline render 替换为 SessionListItem
-- [ ] 添加 provider badge、IM badge、时间显示
-- [ ] 添加 agents/teams 模式切换 tabs
-- [ ] 添加项目 pin 功能
-- [ ] 添加项目拖拽排序
+- [x] 评估是否将 SessionSidebar inline render 替换为 SessionListItem
+- [x] 添加 provider badge、IM badge、时间显示
+- [x] 添加 agents/teams 模式切换 tabs
+- [x] 添加项目 pin 功能
+- [x] 添加项目拖拽排序
 
 #### P2e: IM Button 动态条件
-- [ ] 从 API 获取 channel 状态
-- [ ] 动态设置 hasChannels
+- [x] 从 API 获取 channel 状态
+- [x] 动态设置 hasChannels
+
+#### P2f: ChatToolbar 对话框接线
+- [x] Memory / IM / Evolution / Plugin / Agent / Command Palette / Clear
+- [x] QueryRuntimeBar + 模型选择菜单
+- [x] 选中会话时从列表摘要 hydrate SessionState（无 WS 也可显示名称）
 
 ---
 

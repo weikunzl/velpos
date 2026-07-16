@@ -52,6 +52,7 @@ export function SessionSidebar({
   onCreateProject,
   onDeleteProject,
   onOpenScheduler,
+  onReorderProjects,
 }: SessionSidebarProps) {
   const listRef = useRef<HTMLDivElement>(null)
   const [selectMode, setSelectMode] = useState(false)
@@ -59,16 +60,21 @@ export function SessionSidebar({
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(new Set())
   const [pinnedSessionIds, setPinnedSessionIds] = useState<Set<string>>(() => loadPinnedIds(PINNED_SESSIONS_KEY))
   const [pinnedProjectIds, setPinnedProjectIds] = useState<Set<string>>(() => loadPinnedIds(PINNED_PROJECTS_KEY))
+  const [sidebarMode, setSidebarMode] = useState<'single' | 'teams'>('single')
+  const [dragProjectId, setDragProjectId] = useState<string | null>(null)
 
-  // Group sessions by project
-  const projectMap = new Map<string, Project>()
-  for (const p of projects) {
-    projectMap.set(p.id, p)
-  }
+  const modeProjects = projects.filter((p) =>
+    sidebarMode === 'teams'
+      ? p.project_type === 'team'
+      : p.project_type !== 'team',
+  )
+
+  const modeProjectIds = new Set(modeProjects.map((p) => p.id))
 
   const groupedSessions = new Map<string | '__unassigned', SessionSummary[]>()
   for (const s of sessions) {
     const key = s.project_id || '__unassigned'
+    if (key !== '__unassigned' && !modeProjectIds.has(key)) continue
     if (!groupedSessions.has(key)) groupedSessions.set(key, [])
     groupedSessions.get(key)!.push(s)
   }
@@ -81,7 +87,7 @@ export function SessionSidebar({
     groupedSessions.set(key, list)
   }
 
-  const { pinnedProjects, unpinnedProjects } = splitPinnedProjects(projects, pinnedProjectIds)
+  const { pinnedProjects, unpinnedProjects } = splitPinnedProjects(modeProjects, pinnedProjectIds)
   const orderedProjects = [...pinnedProjects, ...unpinnedProjects] as Project[]
 
   // Scroll to current session
@@ -181,6 +187,25 @@ export function SessionSidebar({
     )
   }
 
+  function handleProjectDrop(targetId: string) {
+    if (!dragProjectId || dragProjectId === targetId) {
+      setDragProjectId(null)
+      return
+    }
+    const ids = orderedProjects.map((p) => p.id)
+    const from = ids.indexOf(dragProjectId)
+    const to = ids.indexOf(targetId)
+    if (from < 0 || to < 0) {
+      setDragProjectId(null)
+      return
+    }
+    const next = [...ids]
+    next.splice(from, 1)
+    next.splice(to, 0, dragProjectId)
+    onReorderProjects(next)
+    setDragProjectId(null)
+  }
+
   function renderProjectGroup(projectId: string, project: Project | undefined) {
     const projectSessions = groupedSessions.get(projectId) || []
     const isCollapsed = collapsedProjects.has(projectId)
@@ -191,7 +216,15 @@ export function SessionSidebar({
     const scheduleCount = scheduleCounts[projectId] || 0
 
     return (
-      <div key={projectId} className="project-group">
+      <div
+        key={projectId}
+        className={`project-group${dragProjectId === projectId ? ' project-group--dragging' : ''}`}
+        draggable={!!project}
+        onDragStart={() => project && setDragProjectId(projectId)}
+        onDragOver={(e) => { e.preventDefault() }}
+        onDrop={() => handleProjectDrop(projectId)}
+        onDragEnd={() => setDragProjectId(null)}
+      >
         <div
           className="project-header"
           onClick={() => toggleProjectCollapse(projectId)}
@@ -297,6 +330,27 @@ export function SessionSidebar({
         </div>
       </div>
 
+      <div className="sidebar-mode-tabs" role="tablist" aria-label="Sidebar mode">
+        <button
+          type="button"
+          role="tab"
+          className={`sidebar-mode-tab${sidebarMode === 'single' ? ' active' : ''}`}
+          aria-selected={sidebarMode === 'single'}
+          onClick={() => setSidebarMode('single')}
+        >
+          Agents
+        </button>
+        <button
+          type="button"
+          role="tab"
+          className={`sidebar-mode-tab${sidebarMode === 'teams' ? ' active' : ''}`}
+          aria-selected={sidebarMode === 'teams'}
+          onClick={() => setSidebarMode('teams')}
+        >
+          Teams
+        </button>
+      </div>
+
       {/* Batch mode bar */}
       {selectMode && (
         <div className="sidebar-batch-bar">
@@ -341,8 +395,11 @@ export function SessionSidebar({
 
         {!loading && sessions.length > 0 && (
           <>
+            {/* Project groups first */}
+            {orderedProjects.map((p) => renderProjectGroup(p.id, p))}
+
             {/* Unassigned sessions */}
-            {groupedSessions.has('__unassigned') && (
+            {sidebarMode === 'single' && groupedSessions.has('__unassigned') && (
               <div className="project-group">
                 <div className="project-header">
                   <span className="project-name">Unassigned</span>
@@ -356,8 +413,12 @@ export function SessionSidebar({
               </div>
             )}
 
-            {/* Project groups */}
-            {orderedProjects.map((p) => renderProjectGroup(p.id, p))}
+            {sidebarMode === 'teams' && orderedProjects.length === 0 && (
+              <div className="sidebar-empty">
+                <div className="sidebar-empty-text">No teams yet</div>
+                <p className="empty-hint">Create a team to coordinate multiple agents</p>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -368,7 +429,7 @@ export function SessionSidebar({
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
           </svg>
-          New Project
+          {sidebarMode === 'teams' ? 'New Team' : 'New Project'}
         </button>
       </div>
 

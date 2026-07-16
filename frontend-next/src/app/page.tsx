@@ -159,6 +159,27 @@ export default function Home() {
     } catch { /* empty */ }
   }, [createSession, sessionList, setCurrentSessionId])
 
+  const handleSelectSession = useCallback((id: string) => {
+    const summary = sessionList.find((s) => s.session_id === id)
+    if (summary) {
+      sessionStore.updateSessionFor(id, {
+        session_id: summary.session_id,
+        name: summary.name,
+        project_id: summary.project_id,
+        project_dir: summary.project_dir,
+        status: summary.status,
+        provider: summary.provider,
+        model: summary.model || 'default',
+        permission_mode: summary.permission_mode || 'default',
+        created_at: summary.created_at,
+        updated_at: summary.updated_at,
+        git_branch: summary.git_branch,
+      })
+      sessionStore.setStatusFor(id, summary.status || 'idle')
+    }
+    setCurrentSessionId(id)
+  }, [sessionList, setCurrentSessionId])
+
   // ── Project handlers ──
 
   const handleCreateProject = useCallback(async (name: string, path: string) => {
@@ -198,7 +219,23 @@ export default function Home() {
     if (sessionListData.length > 0 && !currentSessionId) {
       const lastId = localStorage.getItem('pf_last_session_id')
       const target = lastId ? sessionListData.find((s) => s.session_id === lastId) : undefined
-      setCurrentSessionId(target?.session_id || sessionListData[0].session_id)
+      const id = target?.session_id || sessionListData[0].session_id
+      const summary = target || sessionListData[0]
+      sessionStore.updateSessionFor(id, {
+        session_id: summary.session_id,
+        name: summary.name,
+        project_id: summary.project_id,
+        project_dir: summary.project_dir,
+        status: summary.status,
+        provider: summary.provider,
+        model: summary.model || 'default',
+        permission_mode: summary.permission_mode || 'default',
+        created_at: summary.created_at,
+        updated_at: summary.updated_at,
+        git_branch: summary.git_branch,
+      })
+      sessionStore.setStatusFor(id, summary.status || 'idle')
+      setCurrentSessionId(id)
     }
   }, [sessionListData, currentSessionId, setCurrentSessionId])
 
@@ -304,7 +341,7 @@ export default function Home() {
             scheduleCounts={scheduleCounts}
             collapsed={sidebarCollapsed}
             onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-            onSelect={setCurrentSessionId}
+            onSelect={handleSelectSession}
             onCreate={handleCreateSession}
             onDelete={handleDeleteSession}
             onRename={handleRenameSession}
@@ -323,7 +360,7 @@ export default function Home() {
             <ChatPanel
               sessionId={currentSessionId}
               onOpenBranch={() => setGitManagerVisible(true)}
-              onSelectSession={setCurrentSessionId}
+              onSelectSession={handleSelectSession}
             />
           ) : (
             <div className="empty-state">
@@ -363,7 +400,7 @@ export default function Home() {
         currentSessionId={currentSessionId}
         sidebarMode="sessions"
         onVisibleChange={setMobileNavOpen}
-        onSessionSelect={(session) => setCurrentSessionId(session.session_id)}
+        onSessionSelect={(session) => handleSelectSession(session.session_id)}
         onNewProject={() => setNewProjectVisible(true)}
         onNewSession={(projectId) => { void handleCreateInProject(projectId) }}
         onDeleteSession={handleDeleteSession}
