@@ -18,7 +18,7 @@ export function createSessionApi(params: CreateSessionParams = {}): Promise<Sess
 }
 
 export function listSessionsApi(): Promise<SessionSummary[]> {
-  return get('/sessions')
+  return get<{ sessions: SessionSummary[] }>('/sessions').then((r) => r.sessions)
 }
 
 export function getSessionApi(sessionId: string): Promise<Session> {
