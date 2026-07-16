@@ -4,28 +4,13 @@ import { useState, useEffect, useRef } from 'react'
 import { useTaskProgress } from '../model/useTaskProgress'
 import { formatDurationLong } from '@/shared/lib/formatTime'
 
-interface Message {
-  type: 'assistant' | 'system' | 'tool_result'
-  content?: {
-    blocks?: Array<{ type: 'tool_use'; id?: string; name: string; input?: Record<string, unknown> }>
-    results?: Array<{ tool_use_id: string; content: unknown }>
-    subtype?: string
-    task_id?: string
-    description?: string
-    status?: string
-    summary?: string
-    last_tool_name?: string
-  }
-  timestamp?: number
-}
-
 interface Props {
-  messages: Message[]
+  messages: unknown[]
   status: string
 }
 
 export function TaskProgressPanel({ messages, status }: Props) {
-  const { allTasks, taskCounts, planTasks, planTaskCounts, hasPlanTasks } = useTaskProgress(messages, status)
+  const { allTasks, taskCounts, planTasks, planTaskCounts, hasPlanTasks } = useTaskProgress(messages as never, status)
   const [now, setNow] = useState(Date.now())
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 

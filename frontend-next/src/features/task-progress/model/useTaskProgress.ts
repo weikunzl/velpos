@@ -13,7 +13,7 @@ interface ToolResultContent {
 }
 
 interface Message {
-  type: 'assistant' | 'system' | 'tool_result'
+  type: string
   content?: {
     blocks?: ToolUseBlock[]
     results?: ToolResultContent[]
