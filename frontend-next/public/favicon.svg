@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="fl" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4a9eff"/>
+      <stop offset="100%" stop-color="#a78bfa"/>
+    </linearGradient>
+    <linearGradient id="fr" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a78bfa"/>
+      <stop offset="100%" stop-color="#c084fc"/>
+    </linearGradient>
+    <linearGradient id="fb" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3b5998"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+    <linearGradient id="ft" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#c4b5fd"/>
+      <stop offset="100%" stop-color="#a78bfa"/>
+    </linearGradient>
+  </defs>
+  <!-- Crystal polyhedron facets -->
+  <!-- Left facet -->
+  <polygon fill="url(#fl)" points="256,56 108,200 148,400 256,296"/>
+  <!-- Right facet -->
+  <polygon fill="url(#fr)" points="256,56 404,200 364,400 256,296"/>
+  <!-- Bottom-left facet -->
+  <polygon fill="url(#fb)" points="148,400 256,456 256,296"/>
+  <!-- Bottom-right facet -->
+  <polygon fill="#7c3aed" opacity="0.8" points="364,400 256,456 256,296"/>
+  <!-- Top highlight -->
+  <polygon fill="url(#ft)" opacity="0.5" points="256,56 200,148 256,180 312,148"/>
+  <!-- Central light seam -->
+  <line x1="256" y1="80" x2="256" y2="440" stroke="#67e8f9" stroke-width="3" opacity="0.9"/>
+  <!-- Glow accent -->
+  <ellipse cx="256" cy="480" rx="80" ry="12" fill="#4a9eff" opacity="0.15"/>
+</svg>
