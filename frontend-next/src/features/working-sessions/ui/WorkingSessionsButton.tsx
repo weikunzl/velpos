@@ -32,12 +32,13 @@ export default function WorkingSessionsButton({ onNavigate }: Props) {
   return (
     <div className="working-sessions-wrapper" ref={wrapperRef}>
       <button
-        className="header-toolbar-btn working-sessions-btn"
+        type="button"
+        className="glass-btn glass-btn--icon working-sessions-btn"
         onClick={() => setShowPanel(prev => !prev)}
-        aria-label="Working Sessions"
-        title="Working Sessions"
+        aria-label="Working sessions"
+        title="Working sessions"
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
         </svg>
         {workingCount > 0 && (

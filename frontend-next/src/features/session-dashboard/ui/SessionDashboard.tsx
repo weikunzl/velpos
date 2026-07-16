@@ -1,5 +1,7 @@
 'use client'
 
+import type { ReactNode } from 'react'
+
 export interface ContextUsage {
   current: number
   max: number
@@ -50,6 +52,7 @@ export interface SessionDashboardProps {
   onPermClick: () => void
   onTaskPanelToggle: () => void
   showTaskPanel: boolean
+  taskPanel?: ReactNode
 }
 
 export function SessionDashboard({
@@ -79,7 +82,8 @@ export function SessionDashboard({
   onBranchClick,
   onPermClick,
   onTaskPanelToggle,
-  showTaskPanel: _showTaskPanel,
+  showTaskPanel,
+  taskPanel,
 }: SessionDashboardProps) {
   return (
     <div className="session-dashboard">
@@ -190,9 +194,11 @@ export function SessionDashboard({
           )}
 
           {/* Plan / task progress */}
-          {hasPlanTasks && (
+          <div className="dropdown-wrapper" onClick={(e) => e.stopPropagation()}>
             <button
-              className={`dash-chip dash-agent${planTaskCounts.inProgress > 0 ? ' dash-agent--running' : ''}`}
+              type="button"
+              className={`dash-chip dash-agent${showTaskPanel ? ' dash-chip--open' : ''}${planTaskCounts.inProgress > 0 ? ' dash-agent--running' : ''}`}
+              aria-expanded={showTaskPanel}
               onClick={onTaskPanelToggle}
               title={`Plan: ${planTaskCounts.completed}/${planTaskCounts.total}`}
             >
@@ -204,10 +210,13 @@ export function SessionDashboard({
                 </svg>
               )}
               <span className="dash-chip-main">Plan</span>
-              <span className="dash-chip-count">{planTaskCounts.completed}/{planTaskCounts.total}</span>
+              {hasPlanTasks && (
+                <span className="dash-chip-count">{planTaskCounts.completed}/{planTaskCounts.total}</span>
+              )}
               {planTaskCounts.inProgress > 0 && <span className="dash-chip-state">active</span>}
             </button>
-          )}
+            {showTaskPanel && taskPanel}
+          </div>
         </div>
       </div>
 

@@ -39,7 +39,7 @@ test.describe('Session Management', () => {
   })
 
   test('creates a new session via sidebar button', async ({ page }) => {
-    const newBtn = page.locator('.sidebar-header-btn[title="New session"]')
+    const newBtn = page.locator('.project-action-btn.project-add-btn').first()
     await expect(newBtn).toBeVisible()
     await newBtn.click()
 
@@ -55,7 +55,7 @@ test.describe('Session Management', () => {
 
   test('creates a session within a specific project', async ({ page }) => {
     // Click the "+" button on the first project group
-    const addSessionBtn = page.locator('.project-add-session').first()
+    const addSessionBtn = page.locator('.project-action-btn.project-add-btn').first()
     await addSessionBtn.click()
     await page.waitForTimeout(500)
 
@@ -113,7 +113,7 @@ test.describe('Session Management', () => {
 
   test('batch select mode: enters select mode, selects sessions, and batch deletes', async ({ page }) => {
     // Click the select-mode button
-    const selectBtn = page.locator('.sidebar-header-btn[title="Select multiple"]')
+    const selectBtn = page.locator('.select-mode-btn[title="Select sessions"]')
     await selectBtn.click()
 
     // Batch bar should be visible

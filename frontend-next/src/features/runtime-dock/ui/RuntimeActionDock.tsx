@@ -1,6 +1,5 @@
 'use client'
 
-import { QueryRuntimeBar } from '@/features/cancel-query'
 import { sessionStore } from '@/entities/session'
 import type { SessionState, Message } from '@/shared/types/api'
 
@@ -12,7 +11,7 @@ interface RuntimeActionDockProps {
 export function RuntimeActionDock({ sessionId, state }: RuntimeActionDockProps) {
   if (!state) return null
 
-  const { status, queued, queuedPrompt, queryStartedAt, error, messages } = state
+  const { messages } = state
 
   function handleInteractiveResponse(toolUseId: string, isApproved: boolean, feedback?: string) {
     const ws = sessionStore.getWsConnection(sessionId)
@@ -42,19 +41,10 @@ export function RuntimeActionDock({ sessionId, state }: RuntimeActionDockProps) 
   const interactiveContent = interactiveMsg?.content as Record<string, unknown> | undefined
   const toolInput = interactiveContent?.tool_input
 
-  return (
-    <div className="runtime-dock">
-      {/* Runtime bar (queued / running / error) */}
-      <QueryRuntimeBar
-        sessionId={sessionId}
-        status={status}
-        queryStartedAt={queryStartedAt}
-        queued={queued}
-        queuedPrompt={queuedPrompt}
-        error={error}
-      />
+  if (!interactiveMsg) return null
 
-      {/* Interactive permission request */}
+  return (
+    <div className="runtime-action-dock">
       {interactiveMsg && interactiveContent?.interaction_type === 'permission' && (
         <div className="interactive-block">
           <div className="interactive-title">

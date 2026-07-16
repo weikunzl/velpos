@@ -70,7 +70,7 @@ test.describe('Global Keyboard Shortcuts', () => {
 
   test('Escape closes dialogs', async ({ page }) => {
     // Open Settings dialog
-    await page.locator('.header-toolbar-btn[title="Settings"]').click()
+    await page.locator('.header-toolbar .glass-btn[title="Settings"]').click()
     await page.waitForTimeout(300)
     await expect(page.locator('.modal-overlay')).toBeVisible()
 

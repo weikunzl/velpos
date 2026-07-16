@@ -221,14 +221,16 @@ interface ToolbarBtnProps {
   children: React.ReactNode
 }
 
-function ToolbarBtn({ active = false, disabled = false, onClick, title, children }: ToolbarBtnProps) {
+function ToolbarBtn({ active = false, disabled = false, onClick, title, label, children }: ToolbarBtnProps) {
   return (
     <button
+      type="button"
       className={`toolbar-btn${active ? ' toolbar-btn--active' : ''}`}
       disabled={disabled}
       onClick={onClick}
       title={title}
       aria-label={title}
+      data-tooltip={label || title}
     >
       {children}
     </button>

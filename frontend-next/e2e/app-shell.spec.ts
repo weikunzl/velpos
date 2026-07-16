@@ -14,7 +14,7 @@ test.describe('App Shell', () => {
     await expect(page.locator('[title="Working Sessions"]')).toBeVisible()
     await expect(page.locator('[title="Git Manager"]')).toBeVisible()
     await expect(page.locator('[title="Settings"]')).toBeVisible()
-    await expect(page.locator('[title="Workspace"]')).toBeVisible()
+    await expect(page.locator('[title="Workspace files"]')).toBeVisible()
     await expect(page.locator('[title="Terminal"]')).toBeVisible()
   })
 
@@ -33,7 +33,7 @@ test.describe('App Shell', () => {
     const sessionItem = page.locator('[data-session-id]').first()
     if (await sessionItem.count()) {
       await sessionItem.click()
-      await page.waitForSelector('.send-message-area', { timeout: 10000 })
+    await page.waitForSelector('.input-section, .input-area', { timeout: 10000 })
       await expect(
         page.locator('[title*="Project Rules"], [title*="Memory"]').first(),
       ).toBeVisible()

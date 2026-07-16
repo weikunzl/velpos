@@ -1,28 +1,58 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import ThemeSwitcher from '../ThemeSwitcher'
 
-// Mock useTheme
+const setTheme = vi.fn()
+const setBrightness = vi.fn()
+const setWarmth = vi.fn()
+const reset = vi.fn()
+
 vi.mock('@/shared/lib/useTheme', () => ({
   useTheme: () => ({
-    theme: 'dark',
-    cycleTheme: vi.fn(),
-    nextTheme: () => 'light' as const,
+    theme: 'light',
+    setTheme,
+  }),
+}))
+
+vi.mock('@/shared/lib/useEyeCare', () => ({
+  useEyeCare: () => ({
+    brightness: 100,
+    setBrightness,
+    warmth: 0,
+    setWarmth,
+    reset,
   }),
 }))
 
 describe('ThemeSwitcher', () => {
-  it('renders a button with aria-label for next theme', () => {
-    render(<ThemeSwitcher />)
-    const btn = screen.getByRole('button')
-    expect(btn).toBeInTheDocument()
-    expect(btn.getAttribute('aria-label')).toBe('Switch to Light theme')
-    expect(btn.getAttribute('data-theme-current')).toBe('dark')
+  beforeEach(() => {
+    setTheme.mockClear()
+    setBrightness.mockClear()
+    setWarmth.mockClear()
+    reset.mockClear()
   })
 
-  it('renders svg icon inside button', () => {
+  it('renders three theme radio buttons', () => {
     render(<ThemeSwitcher />)
-    const btn = screen.getByRole('button')
-    expect(btn.querySelector('svg')).toBeInTheDocument()
+    const radios = screen.getAllByRole('radio')
+    expect(radios).toHaveLength(3)
+    expect(screen.getByTitle('Dark')).toBeInTheDocument()
+    expect(screen.getByTitle('Light')).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByTitle('护眼')).toBeInTheDocument()
+  })
+
+  it('switches theme when clicking a different option', () => {
+    render(<ThemeSwitcher />)
+    fireEvent.click(screen.getByTitle('Dark'))
+    expect(setTheme).toHaveBeenCalledWith('dark')
+  })
+
+  it('toggles eyecare panel when clicking the active theme', () => {
+    render(<ThemeSwitcher />)
+    expect(screen.queryByLabelText('亮度')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByTitle('Light'))
+    expect(screen.getByLabelText('亮度')).toBeInTheDocument()
+    fireEvent.click(screen.getByTitle('Light'))
+    expect(screen.queryByLabelText('亮度')).not.toBeInTheDocument()
   })
 })

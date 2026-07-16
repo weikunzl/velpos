@@ -18,7 +18,7 @@ test.describe('Notification Center', () => {
 
   test('header toolbar buttons are clickable', async ({ page }) => {
     // Verify all toolbar buttons render without error
-    const toolbarButtons = page.locator('.header-toolbar-btn')
+    const toolbarButtons = page.locator('.header-toolbar .glass-btn, .header-toolbar .workspace-button')
     const count = await toolbarButtons.count()
     expect(count).toBeGreaterThanOrEqual(4)
 

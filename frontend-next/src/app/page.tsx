@@ -32,9 +32,12 @@ import { AgentDialog } from '@/features/agent-manager'
 import { CommandPalettePopover, useCommandPalette } from '@/features/command-palette'
 import { useGlobalHotkeys } from '@/shared/lib/useGlobalHotkeys'
 import { useViewport } from '@/shared/lib/useViewport'
+import { useChatPanelTools } from '@/shared/lib/useChatPanelTools'
 import { AppToast, useToast } from '@/shared/ui/AppToast'
 import { formatDurationLong } from '@/shared/lib/formatTime'
 import type { SessionSummary } from '@/shared/types/api'
+
+const WORKSPACE_DOCK_WIDTH = 360
 
 export default function Home() {
   const { data: sessionsData, isLoading } = useSessions()
@@ -317,6 +320,8 @@ export default function Home() {
           </div>
           <div className="header-right">
             <HeaderToolbar
+              workspaceActive={workspaceVisible}
+              onNotificationNavigate={(sessionId) => setCurrentSessionId(sessionId)}
               onToggleSettings={() => setSettingsVisible(!settingsVisible)}
               onToggleTerminal={() => setTerminalVisible(!terminalVisible)}
               onToggleWorkspace={() => setWorkspaceVisible(!workspaceVisible)}
@@ -331,7 +336,10 @@ export default function Home() {
         </header>
       )}
 
-      <div className="app-body">
+      <div
+        className="app-body"
+        style={{ paddingRight: workspaceVisible ? WORKSPACE_DOCK_WIDTH : undefined }}
+      >
         {!isMobile && (
           <SessionSidebar
             projects={projects}
@@ -479,8 +487,7 @@ function ChatPanel({
 }) {
   const state = useSessionState(sessionId)
   const inputRef = useRef<MessageInputHandle>(null)
-  const [debugMode, setDebugMode] = useState(false)
-  const [runtimePanelVisible, setRuntimePanelVisible] = useState(false)
+  const { debugMode, runtimePanelVisible, toggleDebug, toggleRuntimePanel } = useChatPanelTools()
   const [rewindPickerOpen, setRewindPickerOpen] = useState(false)
   const [usagePanelOpen, setUsagePanelOpen] = useState(false)
   const [multiSessionOpen, setMultiSessionOpen] = useState(false)
@@ -604,120 +611,152 @@ function ChatPanel({
     } catch { /* empty */ }
   }, [sessionId, messages.length, onSelectSession])
 
+  const queryRuntimeActive = isRunning
+    || Boolean(state?.queued)
+    || (status === 'error' && Boolean(state?.error))
+
   return (
-    <div className="flex flex-col h-full">
-      <MessageList messages={displayMessages} status={status} />
-      {(runtimePanelVisible || isRunning || state?.queued) && (
-        <QueryRuntimeBar
-          sessionId={sessionId}
-          status={status}
-          queryStartedAt={state?.queryStartedAt ?? null}
-          queued={state?.queued}
-          queuedPrompt={state?.queuedPrompt}
-          error={state?.error}
-        />
-      )}
-      <RuntimeActionDock sessionId={sessionId} state={state} />
-      {showTaskPanel && hasPlanTasks && (
-        <TaskProgressPanel messages={messages as never} status={status} />
-      )}
-      <div className="session-dashboard-wrap" style={{ position: 'relative' }}>
-        <SessionDashboard
-          sessionId={sessionId}
-          projectDir={projectDir}
-          projectDirName={projectDirName}
-          modelLabel={modelLabel}
-          gitBranch={gitBranch}
-          permModeLabel={formatPermissionMode(permMode)}
-          permModeColorClass={getPermColorClass(permMode)}
-          sessionElapsed={sessionElapsed}
-          agentProviderLabel={agentProviderLabel}
-          contextUsage={{
-            current: contextUsage.current,
-            max: contextUsage.max,
-            percent: contextUsage.percent,
-          }}
-          contextColorClass={getContextColorClass(contextUsage.percent)}
-          compacting={compacting}
-          isRunning={isRunning}
-          showClaudeControls={showClaudeControls}
-          hasPlanTasks={hasPlanTasks}
-          planTaskCounts={{
-            total: planTaskCounts.total,
-            completed: planTaskCounts.completed,
-            inProgress: planTaskCounts.in_progress,
-          }}
-          totalToolCalls={totalToolCalls}
-          topTools={topTools}
-          toolStats={toolStats}
-          budgetStatus={null}
-          claudeResumeCommand={claudeResumeCommand}
-          onCompact={() => { void compactContext(sessionId) }}
-          onModelClick={() => setModelMenuOpen((v) => !v)}
-          onBranchClick={() => onOpenBranch?.()}
-          onPermClick={handleCyclePermission}
-          onTaskPanelToggle={() => setShowTaskPanel((v) => !v)}
-          showTaskPanel={showTaskPanel}
-        />
-        {modelMenuOpen && (
-          <div className="dropdown-menu model-menu" style={{ position: 'absolute', bottom: '100%', left: 12, zIndex: 40, minWidth: 220 }}>
-            {models.length === 0 ? (
-              <div className="dropdown-empty" style={{ padding: 8, fontSize: 12, color: 'var(--text-secondary)' }}>No models</div>
-            ) : models.map((m) => (
-              <button
-                key={m.value}
-                className={`dropdown-item${m.value === modelLabel ? ' active' : ''}`}
-                onClick={() => handleSelectModel(m.value)}
-                title={m.description || m.value}
-              >
-                {m.label || m.value}
-              </button>
-            ))}
+    <div className="chat-panel-wrapper">
+      <div className="chat-panel">
+        <MessageList messages={displayMessages} status={status} />
+
+        <div className="input-section">
+          {runtimePanelVisible && (
+            <div className="runtime-panel">
+              {queryRuntimeActive ? (
+                <QueryRuntimeBar
+                  sessionId={sessionId}
+                  status={status}
+                  queryStartedAt={state?.queryStartedAt ?? null}
+                  queued={state?.queued}
+                  queuedPrompt={state?.queuedPrompt}
+                  error={state?.error}
+                />
+              ) : (
+                <div className="runtime-content">
+                  <span className="runtime-idle">Idle</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          <ChatToolbar
+            sessionId={sessionId}
+            projectDir={projectDir}
+            projectId={projectId}
+            debugMode={debugMode}
+            runtimePanelVisible={runtimePanelVisible}
+            isRunning={isRunning}
+            showClaudeControls={showClaudeControls}
+            hasChannels={hasChannels}
+            isBoundForSession={isBoundForSession}
+            boundChannelType={boundChannelType}
+            boundInstanceName={boundInstanceName}
+            currentAgentInfo={null}
+            parallelBranchCount={branchSessions.length}
+            queryHistoryCount={state?.queryHistory?.length || 0}
+            clearing={clearing}
+            voiceSupported={false}
+            videoSupported={false}
+            onToggleDebug={toggleDebug}
+            onToggleRuntime={toggleRuntimePanel}
+            onToggleMediaMenu={() => {}}
+            onOpenAgent={() => setAgentOpen(true)}
+            onOpenPlugin={() => setPluginOpen(true)}
+            onOpenMemory={() => setMemoryOpen(true)}
+            onOpenMultiSession={() => setMultiSessionOpen(true)}
+            onOpenCommandPalette={handleOpenCommandPalette}
+            onClear={() => { void clearContext(sessionId) }}
+            onToggleUsage={() => setUsagePanelOpen((v) => !v)}
+            onOpenIM={() => setImOpen(true)}
+            onOpenBranch={onOpenBranch}
+          />
+
+          <RuntimeActionDock sessionId={sessionId} state={state} />
+
+          {queryRuntimeActive && !runtimePanelVisible && (
+            <QueryRuntimeBar
+              sessionId={sessionId}
+              status={status}
+              queryStartedAt={state?.queryStartedAt ?? null}
+              queued={state?.queued}
+              queuedPrompt={state?.queuedPrompt}
+              error={state?.error}
+            />
+          )}
+
+          <div className="input-row">
+            <MessageInput
+              ref={inputRef}
+              sessionId={sessionId}
+              disabled={status === 'disconnected' || status === 'error'}
+              running={isRunning}
+              slashCommands={commandPalette.invokableCommands.map((c) => ({
+                name: c.name,
+                description: c.description,
+              }))}
+            />
           </div>
-        )}
-      </div>
-      <div className="send-message-area">
-        <ChatToolbar
-          sessionId={sessionId}
-          projectDir={projectDir}
-          projectId={projectId}
-          debugMode={debugMode}
-          runtimePanelVisible={runtimePanelVisible}
-          isRunning={isRunning}
-          showClaudeControls={showClaudeControls}
-          hasChannels={hasChannels}
-          isBoundForSession={isBoundForSession}
-          boundChannelType={boundChannelType}
-          boundInstanceName={boundInstanceName}
-          currentAgentInfo={null}
-          parallelBranchCount={branchSessions.length}
-          queryHistoryCount={state?.queryHistory?.length || 0}
-          clearing={clearing}
-          voiceSupported={false}
-          videoSupported={false}
-          onToggleDebug={() => setDebugMode((v) => !v)}
-          onToggleRuntime={() => setRuntimePanelVisible((v) => !v)}
-          onToggleMediaMenu={() => {}}
-          onOpenAgent={() => setAgentOpen(true)}
-          onOpenPlugin={() => setPluginOpen(true)}
-          onOpenMemory={() => setMemoryOpen(true)}
-          onOpenMultiSession={() => setMultiSessionOpen(true)}
-          onOpenCommandPalette={handleOpenCommandPalette}
-          onClear={() => { void clearContext(sessionId) }}
-          onToggleUsage={() => setUsagePanelOpen((v) => !v)}
-          onOpenIM={() => setImOpen(true)}
-          onOpenBranch={onOpenBranch}
-        />
-        <MessageInput
-          ref={inputRef}
-          sessionId={sessionId}
-          disabled={status === 'disconnected' || status === 'error'}
-          running={isRunning}
-          slashCommands={commandPalette.invokableCommands.map((c) => ({
-            name: c.name,
-            description: c.description,
-          }))}
-        />
+
+          <div className="session-dashboard-wrap">
+            <SessionDashboard
+              sessionId={sessionId}
+              projectDir={projectDir}
+              projectDirName={projectDirName}
+              modelLabel={modelLabel}
+              gitBranch={gitBranch}
+              permModeLabel={formatPermissionMode(permMode)}
+              permModeColorClass={getPermColorClass(permMode)}
+              sessionElapsed={sessionElapsed}
+              agentProviderLabel={agentProviderLabel}
+              contextUsage={{
+                current: contextUsage.current,
+                max: contextUsage.max,
+                percent: contextUsage.percent,
+              }}
+              contextColorClass={getContextColorClass(contextUsage.percent)}
+              compacting={compacting}
+              isRunning={isRunning}
+              showClaudeControls={showClaudeControls}
+              hasPlanTasks={hasPlanTasks}
+              planTaskCounts={{
+                total: planTaskCounts.total,
+                completed: planTaskCounts.completed,
+                inProgress: planTaskCounts.in_progress,
+              }}
+              totalToolCalls={totalToolCalls}
+              topTools={topTools}
+              toolStats={toolStats}
+              budgetStatus={null}
+              claudeResumeCommand={claudeResumeCommand}
+              onCompact={() => { void compactContext(sessionId) }}
+              onModelClick={() => setModelMenuOpen((v) => !v)}
+              onBranchClick={() => onOpenBranch?.()}
+              onPermClick={handleCyclePermission}
+              onTaskPanelToggle={() => setShowTaskPanel((v) => !v)}
+              showTaskPanel={showTaskPanel}
+              taskPanel={showTaskPanel ? (
+                <TaskProgressPanel messages={messages as never} status={status} />
+              ) : null}
+            />
+            {modelMenuOpen && (
+              <div className="dropdown-menu model-menu" style={{ position: 'absolute', bottom: '100%', left: 12, zIndex: 40, minWidth: 220 }}>
+                {models.length === 0 ? (
+                  <div className="dropdown-empty" style={{ padding: 8, fontSize: 12, color: 'var(--text-secondary)' }}>No models</div>
+                ) : models.map((m) => (
+                  <button
+                    key={m.value}
+                    className={`dropdown-item${m.value === modelLabel ? ' active' : ''}`}
+                    onClick={() => handleSelectModel(m.value)}
+                    title={m.description || m.value}
+                  >
+                    {m.label || m.value}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       <RewindPicker

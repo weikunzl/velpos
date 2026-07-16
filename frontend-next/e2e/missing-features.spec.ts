@@ -18,7 +18,7 @@ test.describe('Migrated feature wiring', () => {
 
   test('Memory dialog opens from toolbar', async ({ page }) => {
     await page.locator('[data-session-id="ses-1"]').click()
-    await page.waitForSelector('.send-message-area', { timeout: 10000 })
+    await page.waitForSelector('.input-section, .input-area', { timeout: 10000 })
     await page.locator('[title*="Project Rules"]').click()
     await expect(page.locator('.memory-dialog')).toBeVisible({ timeout: 5000 })
   })

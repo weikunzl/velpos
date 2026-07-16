@@ -7,6 +7,7 @@ import type { SessionSummary } from '@/shared/types/api'
 interface SessionListItemProps {
   session: SessionSummary
   active: boolean
+  className?: string
   selectable?: boolean
   selected?: boolean
   pinned?: boolean
@@ -27,6 +28,7 @@ function getShortId(id: string): string {
 export function SessionListItem({
   session,
   active,
+  className = '',
   selectable = false,
   selected = false,
   pinned = false,
@@ -142,7 +144,7 @@ export function SessionListItem({
   return (
     <div
       data-session-id={session.session_id}
-      className={`session-item${active ? ' session-item-active active' : ''}${isClaudeCode ? ' is-claude-code' : ''}${selected ? ' is-selected' : ''}${pinned ? ' is-pinned' : ''}`}
+      className={`session-item${active ? ' session-item-active active' : ''}${isClaudeCode ? ' is-claude-code' : ''}${selected ? ' is-selected' : ''}${pinned ? ' is-pinned' : ''}${className ? ` ${className}` : ''}`}
       onClick={handleClick}
       role="button"
       tabIndex={0}

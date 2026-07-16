@@ -2,6 +2,7 @@ export const PINNED_PROJECTS_KEY = 'pf_pinned_projects'
 export const PINNED_SESSIONS_KEY = 'pf_pinned_sessions'
 
 export function loadPinnedIds(key: string): Set<string> {
+  if (typeof window === 'undefined') return new Set()
   try {
     const stored = localStorage.getItem(key)
     return stored ? new Set(JSON.parse(stored)) : new Set()

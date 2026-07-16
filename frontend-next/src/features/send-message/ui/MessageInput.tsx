@@ -351,7 +351,7 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
   }
 
   return (
-    <div className="send-message-container" onDragOver={handleDragOver} onDrop={handleDrop}>
+    <div className="input-area" onDragOver={handleDragOver} onDrop={handleDrop}>
       {/* Attachment previews */}
       {attachments.length > 0 && (
         <div className="attachment-previews">
@@ -407,10 +407,9 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
         </div>
       )}
 
-      <div className="send-input-area">
-        <textarea
+      <textarea
           ref={textareaRef}
-          className="send-message-input"
+          className="input-field"
           placeholder={placeholderText}
           value={text}
           onChange={handleChange}
@@ -421,31 +420,34 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
           onPaste={handlePaste}
           disabled={disabled}
           rows={1}
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
         />
-        <div className="send-actions">
-          {/* Attach file button */}
-          <button
-            className="attach-btn"
-            onClick={openFilePicker}
-            disabled={disabled}
-            title="Attach file"
-            aria-label="Attach file"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-            </svg>
-          </button>
+        <div className="input-actions">
           <input
             ref={fileInputRef}
             type="file"
-            className="hidden-file-input"
+            className="file-input"
             onChange={handleFileSelect}
             multiple
             aria-hidden="true"
           />
 
-          {/* Send button */}
           <button
+            type="button"
+            className="attach-btn"
+            onClick={openFilePicker}
+            disabled={disabled}
+            title="Attach files"
+            aria-label="Attach files"
+          >
+            +
+          </button>
+
+          <button
+            type="button"
             className="send-btn"
             disabled={(!text.trim() && attachments.length === 0) || disabled || sending}
             onClick={() => sendMessage(text)}
@@ -462,7 +464,6 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
             )}
           </button>
         </div>
-      </div>
     </div>
   )
 })

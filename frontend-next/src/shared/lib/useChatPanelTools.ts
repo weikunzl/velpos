@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 const DEBUG_KEY = 'pf_debug_mode'
 const RUNTIME_KEY = 'pf_runtime_panel'
@@ -9,8 +9,13 @@ function getStoredBoolean(key: string): boolean {
 }
 
 export function useChatPanelTools() {
-  const [debugMode, setDebugMode] = useState(() => getStoredBoolean(DEBUG_KEY))
-  const [runtimePanelVisible, setRuntimePanelVisible] = useState(() => getStoredBoolean(RUNTIME_KEY))
+  const [debugMode, setDebugMode] = useState(false)
+  const [runtimePanelVisible, setRuntimePanelVisible] = useState(false)
+
+  useEffect(() => {
+    setDebugMode(getStoredBoolean(DEBUG_KEY))
+    setRuntimePanelVisible(getStoredBoolean(RUNTIME_KEY))
+  }, [])
 
   const toggleDebug = useCallback(() => {
     setDebugMode(prev => {

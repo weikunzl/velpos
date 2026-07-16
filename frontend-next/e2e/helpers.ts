@@ -346,7 +346,7 @@ export async function createSessionViaSidebar(page: Page) {
  * Helper: open a dialog by clicking its toolbar button.
  */
 export async function openToolbarDialog(page: Page, dialogTitle: string) {
-  const btn = page.locator(`.header-toolbar-btn[title="${dialogTitle}"]`)
+  const btn = page.locator(`.header-toolbar .glass-btn[title="${dialogTitle}"], .workspace-button[title="${dialogTitle}"]`)
   await btn.click()
   await page.waitForTimeout(300)
 }

@@ -18,7 +18,7 @@ test.describe('Chat Panel', () => {
     await expect(mainArea).toBeVisible()
 
     // Message input should exist
-    const inputArea = page.locator('.send-message-area, .message-input-area')
+    const inputArea = page.locator('.input-section, .input-area, .input-row')
     await expect(inputArea).toBeVisible({ timeout: 3000 }).catch(() => {
       // Input area might use different class
     })
@@ -47,7 +47,7 @@ test.describe('Chat Panel', () => {
     await expect(header).toBeVisible()
 
     // Check that the header toolbar buttons exist by looking for the header-toolbar-btn class
-    const toolbarButtons = page.locator('.header-toolbar-btn')
+    const toolbarButtons = page.locator('.header-toolbar .glass-btn, .header-toolbar .workspace-button')
     const btnCount = await toolbarButtons.count()
     // Should have at least Git Manager, Settings, Workspace, Terminal buttons
     expect(btnCount).toBeGreaterThanOrEqual(4)
