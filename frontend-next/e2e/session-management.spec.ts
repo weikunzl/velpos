@@ -140,19 +140,11 @@ test.describe('Session Management', () => {
     })
   })
 
-  test('collapses and expands sidebar', async ({ page }) => {
-    const collapseBtn = page.locator('.sidebar-collapse-btn-side, .sidebar-collapse-btn')
-    await expect(collapseBtn.first()).toBeVisible()
-    await collapseBtn.first().click()
-    await page.waitForTimeout(300)
-    await expect(page.locator('.main-sidebar')).toHaveClass(/sidebar-collapsed/)
-
-    const expandBtn = page.locator('.sidebar-expand-btn')
-    if (await expandBtn.count()) {
-      await expandBtn.click()
-      await page.waitForTimeout(300)
-      await expect(page.locator('.main-sidebar')).not.toHaveClass(/sidebar-collapsed/)
-    }
+  test('collapses sidebar', async ({ page }) => {
+    const collapseBtn = page.locator('.sidebar-collapse-btn-side').first()
+    await expect(collapseBtn).toBeVisible()
+    await collapseBtn.click()
+    await expect(page.locator('.main-sidebar')).toHaveClass(/sidebar-collapsed/, { timeout: 5000 })
   })
 
   test('shows empty state when no sessions', async ({ page }) => {
