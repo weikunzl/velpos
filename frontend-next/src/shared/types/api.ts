@@ -71,7 +71,7 @@ export interface Project {
 export interface Message {
   _id?: number
   id?: string
-  type: 'result' | 'text' | 'system' | 'interactive' | 'tool_use'
+  type: 'result' | 'text' | 'system' | 'interactive' | 'tool_use' | 'user' | 'assistant' | 'tool_result'
   content: Record<string, unknown>
   timestamp?: number
   role?: string
