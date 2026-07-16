@@ -1,8 +1,17 @@
 'use client'
 
 import { useRef, useEffect, useCallback, useState } from 'react'
-import { useSessionContext } from '@/entities/session'
 import type { SessionSummary, Project } from '@/shared/types/api'
+import { SessionListItem } from './SessionListItem'
+import {
+  PINNED_SESSIONS_KEY,
+  PINNED_PROJECTS_KEY,
+  loadPinnedIds,
+  savePinnedIds,
+  togglePinnedId,
+  compareSessions,
+  splitPinnedProjects,
+} from '@/shared/lib/pinning'
 
 interface SessionSidebarProps {
   projects: Project[]
@@ -45,11 +54,11 @@ export function SessionSidebar({
   onOpenScheduler,
 }: SessionSidebarProps) {
   const listRef = useRef<HTMLDivElement>(null)
-  const [renamingId, setRenamingId] = useState<string | null>(null)
-  const [renameValue, setRenameValue] = useState('')
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(new Set())
+  const [pinnedSessionIds, setPinnedSessionIds] = useState<Set<string>>(() => loadPinnedIds(PINNED_SESSIONS_KEY))
+  const [pinnedProjectIds, setPinnedProjectIds] = useState<Set<string>>(() => loadPinnedIds(PINNED_PROJECTS_KEY))
 
   // Group sessions by project
   const projectMap = new Map<string, Project>()
@@ -63,6 +72,17 @@ export function SessionSidebar({
     if (!groupedSessions.has(key)) groupedSessions.set(key, [])
     groupedSessions.get(key)!.push(s)
   }
+  for (const [key, list] of groupedSessions) {
+    list.sort((a, b) => compareSessions(
+      { session_id: a.session_id, status: a.status, updated_time: a.updated_at },
+      { session_id: b.session_id, status: b.status, updated_time: b.updated_at },
+      pinnedSessionIds,
+    ))
+    groupedSessions.set(key, list)
+  }
+
+  const { pinnedProjects, unpinnedProjects } = splitPinnedProjects(projects, pinnedProjectIds)
+  const orderedProjects = [...pinnedProjects, ...unpinnedProjects] as Project[]
 
   // Scroll to current session
   const scrollToSession = useCallback(
@@ -109,26 +129,27 @@ export function SessionSidebar({
     })
   }
 
-  // Rename handlers
-  function startRename(id: string, currentName: string) {
-    setRenamingId(id)
-    setRenameValue(currentName)
-  }
-
-  function confirmRename() {
-    if (renamingId && renameValue.trim()) {
-      onRename(renamingId, renameValue.trim())
-    }
-    setRenamingId(null)
-    setRenameValue('')
-  }
-
-  // Batch selection
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
+      return next
+    })
+  }
+
+  function togglePinSession(id: string) {
+    setPinnedSessionIds((prev) => {
+      const next = togglePinnedId(prev, id)
+      savePinnedIds(PINNED_SESSIONS_KEY, next)
+      return next
+    })
+  }
+
+  function togglePinProject(id: string) {
+    setPinnedProjectIds((prev) => {
+      const next = togglePinnedId(prev, id)
+      savePinnedIds(PINNED_PROJECTS_KEY, next)
       return next
     })
   }
@@ -142,91 +163,21 @@ export function SessionSidebar({
   }
 
   function renderSessionItem(s: SessionSummary) {
-    const isSelected = s.session_id === currentSessionId
-    const isMarked = selectedIds.has(s.session_id)
-    const isRenaming = renamingId === s.session_id
-
     return (
-      <div
+      <SessionListItem
         key={s.session_id}
-        data-session-id={s.session_id}
-        className={`session-item ${isSelected ? 'session-item-active' : ''}`}
-        onClick={() => {
-          if (selectMode) {
-            toggleSelect(s.session_id)
-          } else {
-            onSelect(s.session_id)
-          }
-        }}
-        onContextMenu={(e) => {
-          e.preventDefault()
-          // Could show context menu here
-        }}
-      >
-        {selectMode && (
-          <div
-            className={`session-checkbox ${isMarked ? 'session-checkbox-checked' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation()
-              toggleSelect(s.session_id)
-            }}
-          >
-            {isMarked && (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            )}
-          </div>
-        )}
-        <div className="session-item-content">
-          {isRenaming ? (
-            <input
-              className="session-rename-input"
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') confirmRename()
-                if (e.key === 'Escape') setRenamingId(null)
-              }}
-              onBlur={confirmRename}
-              autoFocus
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <div className="session-item-name">{s.name || 'Unnamed'}</div>
-          )}
-          <div className="session-item-meta">
-            <span className={`session-status-dot status-${s.status}`} />
-            <span className="session-item-status">{s.status}</span>
-            {s.model && <span className="session-item-model">{s.model}</span>}
-          </div>
-        </div>
-        {!selectMode && (
-          <div className="session-item-actions" onClick={(e) => e.stopPropagation()}>
-            <button
-              className="session-action-btn"
-              title="Rename"
-              onClick={() => startRename(s.session_id, s.name)}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>
-            </button>
-            <button
-              className="session-action-btn"
-              title="Copy"
-              onClick={() => onCopy(s.session_id)}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
-            </button>
-            <button
-              className="session-action-btn session-action-danger"
-              title="Delete"
-              onClick={() => onDelete(s.session_id)}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
-            </button>
-          </div>
-        )}
-      </div>
+        session={s}
+        active={s.session_id === currentSessionId}
+        selectable={selectMode}
+        selected={selectedIds.has(s.session_id)}
+        pinned={pinnedSessionIds.has(s.session_id)}
+        onSelect={onSelect}
+        onDelete={onDelete}
+        onCopy={onCopy}
+        onRename={onRename}
+        onToggleSelect={toggleSelect}
+        onTogglePin={togglePinSession}
+      />
     )
   }
 
@@ -264,6 +215,18 @@ export function SessionSidebar({
           </svg>
           <span className="project-name">{projectName}</span>
           <span className="project-session-count">{projectSessions.length}</span>
+          {project && (
+            <button
+              className={`project-pin-btn${pinnedProjectIds.has(projectId) ? ' pinned' : ''}`}
+              title={pinnedProjectIds.has(projectId) ? 'Unpin project' : 'Pin project'}
+              onClick={(e) => {
+                e.stopPropagation()
+                togglePinProject(projectId)
+              }}
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>
+            </button>
+          )}
           {scheduleCount > 0 && (
             <button
               className="project-schedule-badge"
@@ -394,7 +357,7 @@ export function SessionSidebar({
             )}
 
             {/* Project groups */}
-            {projects.map((p) => renderProjectGroup(p.id, p))}
+            {orderedProjects.map((p) => renderProjectGroup(p.id, p))}
           </>
         )}
       </div>

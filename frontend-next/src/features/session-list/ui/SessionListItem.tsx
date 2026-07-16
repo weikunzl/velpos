@@ -141,7 +141,8 @@ export function SessionListItem({
 
   return (
     <div
-      className={`session-item${active ? ' active' : ''}${isClaudeCode ? ' is-claude-code' : ''}${selected ? ' is-selected' : ''}${pinned ? ' is-pinned' : ''}`}
+      data-session-id={session.session_id}
+      className={`session-item${active ? ' session-item-active active' : ''}${isClaudeCode ? ' is-claude-code' : ''}${selected ? ' is-selected' : ''}${pinned ? ' is-pinned' : ''}`}
       onClick={handleClick}
       role="button"
       tabIndex={0}
@@ -168,7 +169,7 @@ export function SessionListItem({
               </label>
             ) : (
               <span
-                className={`status-dot ${statusClass}`}
+                className={`status-dot session-status-dot ${statusClass}`}
                 aria-label={isClaudeCode ? 'claude-code' : session.status || 'idle'}
               />
             )}
@@ -176,7 +177,7 @@ export function SessionListItem({
             {editing && !isClaudeCode ? (
               <input
                 ref={editInputRef}
-                className="rename-input"
+                className="rename-input session-rename-input"
                 value={editName}
                 onClick={(e) => e.stopPropagation()}
                 onKeyDown={(e) => {
@@ -189,13 +190,13 @@ export function SessionListItem({
               />
             ) : (
               <>
-                <span className="session-name" onDoubleClick={startEditing}>
+                <span className="session-name session-item-name" onDoubleClick={startEditing}>
                   {displayName}
                 </span>
-                <span className="action-buttons">
+                <span className="action-buttons session-item-actions">
                   {onTogglePin && (
                     <button
-                      className={`pin-btn${pinned ? ' pinned' : ''}`}
+                      className={`pin-btn session-action-btn${pinned ? ' pinned' : ''}`}
                       onClick={(e) => { e.stopPropagation(); onTogglePin(session.session_id) }}
                       aria-label={pinned ? 'Unpin session' : 'Pin session'}
                       title={pinned ? 'Unpin' : 'Pin'}
@@ -206,13 +207,23 @@ export function SessionListItem({
                       </svg>
                     </button>
                   )}
+                  {!isClaudeCode && onRename && (
+                    <button
+                      className="session-action-btn rename-btn"
+                      onClick={(e) => { e.stopPropagation(); startEditing(e) }}
+                      aria-label="Rename"
+                      title="Rename"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>
+                    </button>
+                  )}
                   {!isClaudeCode && onCopy && (
                     <button
-                      className={`copy-btn${copying ? ' copying' : ''}`}
+                      className={`copy-btn session-action-btn${copying ? ' copying' : ''}`}
                       disabled={copying}
                       onClick={requestCopy}
-                      aria-label="复制会话"
-                      title="复制会话"
+                      aria-label="Copy"
+                      title="Copy"
                     >
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
@@ -221,9 +232,10 @@ export function SessionListItem({
                     </button>
                   )}
                   <button
-                    className="delete-btn"
+                    className="delete-btn session-action-btn session-action-danger"
                     onClick={requestDelete}
-                    aria-label="Delete session"
+                    aria-label="Delete"
+                    title="Delete"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="18" y1="6" x2="6" y2="18"/>
