@@ -145,7 +145,7 @@ test.describe('Session Management', () => {
     await expect(collapseBtn.first()).toBeVisible()
     await collapseBtn.first().click()
     await page.waitForTimeout(300)
-    await expect(page.locator('.main-sidebar.sidebar-collapsed, .sidebar-collapsed')).toBeVisible()
+    await expect(page.locator('.main-sidebar')).toHaveClass(/sidebar-collapsed/)
 
     const expandBtn = page.locator('.sidebar-expand-btn')
     if (await expandBtn.count()) {
