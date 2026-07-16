@@ -3,12 +3,13 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useSessions, useCreateSession, useDeleteSession, useRenameSession, useBatchDeleteSessions } from '@/entities/session/api/useSessionQuery'
 import { useProjects, useCreateProject, useDeleteProject, useReorderProjects } from '@/entities/project/api/useProjectQuery'
-import { useSessionContext, useCurrentSession, useSessionState, sessionStore } from '@/entities/session'
+import { useSessionContext, useCurrentSession, useSessionState, sessionStore, listModelsApi, listSessionBranchesApi, createSessionBranchApi } from '@/entities/session'
 import { SessionSidebar, NewProjectDialog } from '@/features/session-list'
 import { MessageList } from '@/features/message-display'
-import { MessageInput } from '@/features/send-message'
+import { MessageInput, useSessionStats } from '@/features/send-message'
 import type { MessageInputHandle } from '@/features/send-message'
 import { RuntimeActionDock } from '@/features/runtime-dock'
+import { QueryRuntimeBar } from '@/features/cancel-query'
 import { ChatToolbar } from '@/features/input-toolbar'
 import { HeaderToolbar } from '@/features/header-toolbar'
 import { RewindPicker, type RewindItem } from '@/features/rewind-picker'
@@ -19,14 +20,21 @@ import { TerminalDrawer } from '@/features/terminal'
 import { GitManagerDialog } from '@/features/git-manager'
 import { WorkspacePanel } from '@/features/workspace'
 import { SessionDashboard } from '@/features/session-dashboard'
-import { useSessionStats } from '@/features/send-message'
 import { useCompactContext } from '@/features/compact-context'
+import { useClearContext } from '@/features/clear-context'
 import { useTaskProgress, TaskProgressPanel } from '@/features/task-progress'
 import { MobileHeader, MobileNavStack, MobileMoreSheet } from '@/features/mobile-nav'
+import { MemoryDialog } from '@/features/memory-manager'
+import { ImDialog, useImBinding } from '@/features/im-binding'
+import { EvolutionDialog } from '@/features/evolution'
+import { PluginManagerDialog } from '@/features/plugin-manager'
+import { AgentDialog } from '@/features/agent-manager'
+import { CommandPalettePopover, useCommandPalette } from '@/features/command-palette'
 import { useGlobalHotkeys } from '@/shared/lib/useGlobalHotkeys'
 import { useViewport } from '@/shared/lib/useViewport'
 import { AppToast, useToast } from '@/shared/ui/AppToast'
 import { formatDurationLong } from '@/shared/lib/formatTime'
+import type { SessionSummary } from '@/shared/types/api'
 
 export default function Home() {
   const { data: sessionsData, isLoading } = useSessions()
@@ -312,7 +320,11 @@ export default function Home() {
 
         <main className="app-main">
           {currentSessionId ? (
-            <ChatPanel sessionId={currentSessionId} onOpenBranch={() => setGitManagerVisible(true)} />
+            <ChatPanel
+              sessionId={currentSessionId}
+              onOpenBranch={() => setGitManagerVisible(true)}
+              onSelectSession={setCurrentSessionId}
+            />
           ) : (
             <div className="empty-state">
               <div className="empty-icon">
@@ -413,7 +425,21 @@ function formatProviderLabel(provider?: string): string {
 
 // ── ChatPanel: the main conversation area ──
 
-function ChatPanel({ sessionId, onOpenBranch }: { sessionId: string; onOpenBranch?: () => void }) {
+interface ModelOption {
+  value: string
+  label?: string
+  description?: string
+}
+
+function ChatPanel({
+  sessionId,
+  onOpenBranch,
+  onSelectSession,
+}: {
+  sessionId: string
+  onOpenBranch?: () => void
+  onSelectSession?: (id: string) => void
+}) {
   const state = useSessionState(sessionId)
   const inputRef = useRef<MessageInputHandle>(null)
   const [debugMode, setDebugMode] = useState(false)
@@ -422,26 +448,68 @@ function ChatPanel({ sessionId, onOpenBranch }: { sessionId: string; onOpenBranc
   const [usagePanelOpen, setUsagePanelOpen] = useState(false)
   const [multiSessionOpen, setMultiSessionOpen] = useState(false)
   const [showTaskPanel, setShowTaskPanel] = useState(false)
+  const [memoryOpen, setMemoryOpen] = useState(false)
+  const [imOpen, setImOpen] = useState(false)
+  const [evolutionOpen, setEvolutionOpen] = useState(false)
+  const [pluginOpen, setPluginOpen] = useState(false)
+  const [agentOpen, setAgentOpen] = useState(false)
+  const [modelMenuOpen, setModelMenuOpen] = useState(false)
+  const [models, setModels] = useState<ModelOption[]>([])
+  const [branchSessions, setBranchSessions] = useState<SessionSummary[]>([])
   const [now, setNow] = useState(() => Date.now())
 
   const { compacting, compactContext } = useCompactContext()
+  const { clearing, clearContext } = useClearContext()
   const { contextUsage, toolStats, gitBranch: statsGitBranch } = useSessionStats(sessionId)
+  const im = useImBinding()
 
   const status = state?.status || 'disconnected'
   const messages = state?.messages || []
+  const session = state?.session
+  const projectDir = session?.project_dir || ''
+  const projectId = session?.project_id || ''
   const { planTaskCounts, hasPlanTasks } = useTaskProgress(messages as never, status)
+  const commandPalette = useCommandPalette(projectDir || null)
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30000)
     return () => clearInterval(timer)
   }, [])
 
-  // Filter messages based on debug mode (when off, hide tool_use/system/internal messages)
+  useEffect(() => {
+    void im.fetchChannels()
+    void im.fetchStatus(sessionId)
+  }, [sessionId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (projectDir) {
+      void commandPalette.loadCommands(session?.provider || 'claude')
+    }
+  }, [projectDir, session?.provider]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!modelMenuOpen) return
+    listModelsApi(session?.provider || '').then((list) => {
+      const opts = (list as ModelOption[]).map((m) => ({
+        value: m.value || String((m as { id?: string }).id || ''),
+        label: m.label || m.value,
+        description: m.description,
+      })).filter((m) => m.value)
+      setModels(opts)
+    }).catch(() => setModels([]))
+  }, [modelMenuOpen, session?.provider])
+
+  useEffect(() => {
+    if (!multiSessionOpen) return
+    listSessionBranchesApi(sessionId)
+      .then((list) => setBranchSessions((list || []) as unknown as SessionSummary[]))
+      .catch(() => setBranchSessions([]))
+  }, [multiSessionOpen, sessionId])
+
   const displayMessages = debugMode
     ? messages
     : messages.filter((m) => m.role !== 'system' && m.type !== 'tool_use')
 
-  // Generate rewind items from user messages for RewindPicker
   const rewindItems: RewindItem[] = messages
     .filter((m) => m.role === 'user')
     .map((m, i) => ({
@@ -452,12 +520,9 @@ function ChatPanel({ sessionId, onOpenBranch }: { sessionId: string; onOpenBranc
       messageId: m.id,
     }))
 
-  // Compute totals for UsagePanel
   const totalInputTokens = (state?.queryHistory || []).reduce((s, q) => s + (q.usage?.input_tokens || 0), 0)
   const totalOutputTokens = (state?.queryHistory || []).reduce((s, q) => s + (q.usage?.output_tokens || 0), 0)
 
-  const session = state?.session
-  const projectDir = session?.project_dir || ''
   const projectDirName = getProjectDirName(projectDir)
   const modelLabel = session?.model || 'default'
   const gitBranch = statsGitBranch || session?.git_branch || ''
@@ -470,6 +535,10 @@ function ChatPanel({ sessionId, onOpenBranch }: { sessionId: string; onOpenBranc
   const totalToolCalls = toolStats.reduce((sum, t) => sum + t.count, 0)
   const topTools = toolStats.slice(0, 5)
   const claudeResumeCommand = showClaudeControls ? `claude --resume ${sessionId}` : ''
+  const hasChannels = im.availableChannels.length > 0
+  const isBoundForSession = im.isBound
+  const boundChannelType = im.bindingState?.channel_type || ''
+  const boundInstanceName = im.bindingState?.display_name || ''
 
   const handleCyclePermission = useCallback(() => {
     const conn = sessionStore.getWsConnection(sessionId)
@@ -479,99 +548,145 @@ function ChatPanel({ sessionId, onOpenBranch }: { sessionId: string; onOpenBranc
     conn.send({ action: 'set_permission_mode', mode: next })
   }, [sessionId, permMode])
 
+  const handleSelectModel = useCallback((model: string) => {
+    const conn = sessionStore.getWsConnection(sessionId)
+    conn?.send({ action: 'set_model', model })
+    setModelMenuOpen(false)
+  }, [sessionId])
+
+  const handleOpenCommandPalette = useCallback(() => {
+    void commandPalette.loadCommands(session?.provider || 'claude')
+    commandPalette.togglePanel()
+  }, [commandPalette, session?.provider])
+
+  const handleCreateBranch = useCallback(async () => {
+    try {
+      const created = await createSessionBranchApi(sessionId, Math.max(0, messages.length - 1))
+      onSelectSession?.(created.session_id)
+      setMultiSessionOpen(false)
+    } catch { /* empty */ }
+  }, [sessionId, messages.length, onSelectSession])
+
   return (
     <div className="flex flex-col h-full">
-      <MessageList
-        messages={displayMessages}
-        status={status}
-      />
+      <MessageList messages={displayMessages} status={status} />
+      {(runtimePanelVisible || isRunning || state?.queued) && (
+        <QueryRuntimeBar
+          sessionId={sessionId}
+          status={status}
+          queryStartedAt={state?.queryStartedAt ?? null}
+          queued={state?.queued}
+          queuedPrompt={state?.queuedPrompt}
+          error={state?.error}
+        />
+      )}
       <RuntimeActionDock sessionId={sessionId} state={state} />
       {showTaskPanel && hasPlanTasks && (
         <TaskProgressPanel messages={messages as never} status={status} />
       )}
-      <SessionDashboard
-        sessionId={sessionId}
-        projectDir={projectDir}
-        projectDirName={projectDirName}
-        modelLabel={modelLabel}
-        gitBranch={gitBranch}
-        permModeLabel={formatPermissionMode(permMode)}
-        permModeColorClass={getPermColorClass(permMode)}
-        sessionElapsed={sessionElapsed}
-        agentProviderLabel={agentProviderLabel}
-        contextUsage={{
-          current: contextUsage.current,
-          max: contextUsage.max,
-          percent: contextUsage.percent,
-        }}
-        contextColorClass={getContextColorClass(contextUsage.percent)}
-        compacting={compacting}
-        isRunning={isRunning}
-        showClaudeControls={showClaudeControls}
-        hasPlanTasks={hasPlanTasks}
-        planTaskCounts={{
-          total: planTaskCounts.total,
-          completed: planTaskCounts.completed,
-          inProgress: planTaskCounts.in_progress,
-        }}
-        totalToolCalls={totalToolCalls}
-        topTools={topTools}
-        toolStats={toolStats}
-        budgetStatus={null}
-        claudeResumeCommand={claudeResumeCommand}
-        onCompact={() => { void compactContext(sessionId) }}
-        onModelClick={() => {}}
-        onBranchClick={() => onOpenBranch?.()}
-        onPermClick={handleCyclePermission}
-        onTaskPanelToggle={() => setShowTaskPanel((v) => !v)}
-        showTaskPanel={showTaskPanel}
-      />
+      <div className="session-dashboard-wrap" style={{ position: 'relative' }}>
+        <SessionDashboard
+          sessionId={sessionId}
+          projectDir={projectDir}
+          projectDirName={projectDirName}
+          modelLabel={modelLabel}
+          gitBranch={gitBranch}
+          permModeLabel={formatPermissionMode(permMode)}
+          permModeColorClass={getPermColorClass(permMode)}
+          sessionElapsed={sessionElapsed}
+          agentProviderLabel={agentProviderLabel}
+          contextUsage={{
+            current: contextUsage.current,
+            max: contextUsage.max,
+            percent: contextUsage.percent,
+          }}
+          contextColorClass={getContextColorClass(contextUsage.percent)}
+          compacting={compacting}
+          isRunning={isRunning}
+          showClaudeControls={showClaudeControls}
+          hasPlanTasks={hasPlanTasks}
+          planTaskCounts={{
+            total: planTaskCounts.total,
+            completed: planTaskCounts.completed,
+            inProgress: planTaskCounts.in_progress,
+          }}
+          totalToolCalls={totalToolCalls}
+          topTools={topTools}
+          toolStats={toolStats}
+          budgetStatus={null}
+          claudeResumeCommand={claudeResumeCommand}
+          onCompact={() => { void compactContext(sessionId) }}
+          onModelClick={() => setModelMenuOpen((v) => !v)}
+          onBranchClick={() => onOpenBranch?.()}
+          onPermClick={handleCyclePermission}
+          onTaskPanelToggle={() => setShowTaskPanel((v) => !v)}
+          showTaskPanel={showTaskPanel}
+        />
+        {modelMenuOpen && (
+          <div className="dropdown-menu model-menu" style={{ position: 'absolute', bottom: '100%', left: 12, zIndex: 40, minWidth: 220 }}>
+            {models.length === 0 ? (
+              <div className="dropdown-empty" style={{ padding: 8, fontSize: 12, color: 'var(--text-secondary)' }}>No models</div>
+            ) : models.map((m) => (
+              <button
+                key={m.value}
+                className={`dropdown-item${m.value === modelLabel ? ' active' : ''}`}
+                onClick={() => handleSelectModel(m.value)}
+                title={m.description || m.value}
+              >
+                {m.label || m.value}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       <div className="send-message-area">
         <ChatToolbar
           sessionId={sessionId}
           projectDir={projectDir}
-          projectId={session?.project_id || ''}
+          projectId={projectId}
           debugMode={debugMode}
           runtimePanelVisible={runtimePanelVisible}
           isRunning={isRunning}
           showClaudeControls={showClaudeControls}
-          hasChannels={false}
-          isBoundForSession={false}
-          boundChannelType=""
-          boundInstanceName=""
+          hasChannels={hasChannels}
+          isBoundForSession={isBoundForSession}
+          boundChannelType={boundChannelType}
+          boundInstanceName={boundInstanceName}
           currentAgentInfo={null}
-          parallelBranchCount={0}
+          parallelBranchCount={branchSessions.length}
           queryHistoryCount={state?.queryHistory?.length || 0}
-          clearing={false}
+          clearing={clearing}
           voiceSupported={false}
           videoSupported={false}
           onToggleDebug={() => setDebugMode((v) => !v)}
           onToggleRuntime={() => setRuntimePanelVisible((v) => !v)}
           onToggleMediaMenu={() => {}}
-          onOpenAgent={() => {}}
-          onOpenPlugin={() => {}}
-          onOpenMemory={() => {}}
+          onOpenAgent={() => setAgentOpen(true)}
+          onOpenPlugin={() => setPluginOpen(true)}
+          onOpenMemory={() => setMemoryOpen(true)}
           onOpenMultiSession={() => setMultiSessionOpen(true)}
-          onOpenCommandPalette={() => {}}
-          onClear={() => {}}
+          onOpenCommandPalette={handleOpenCommandPalette}
+          onClear={() => { void clearContext(sessionId) }}
           onToggleUsage={() => setUsagePanelOpen((v) => !v)}
-          onOpenIM={() => {}}
+          onOpenIM={() => setImOpen(true)}
           onOpenBranch={onOpenBranch}
         />
         <MessageInput
           ref={inputRef}
           sessionId={sessionId}
           disabled={status === 'disconnected' || status === 'error'}
+          running={isRunning}
+          slashCommands={commandPalette.invokableCommands.map((c) => ({
+            name: c.name,
+            description: c.description,
+          }))}
         />
       </div>
 
       <RewindPicker
         open={rewindPickerOpen}
         items={rewindItems}
-        onRewindTo={() => {
-          // TODO: integrate with session rewind API
-          setRewindPickerOpen(false)
-        }}
+        onRewindTo={() => setRewindPickerOpen(false)}
         onClose={() => setRewindPickerOpen(false)}
       />
       <UsagePanel
@@ -586,11 +701,70 @@ function ChatPanel({ sessionId, onOpenBranch }: { sessionId: string; onOpenBranc
       />
       <MultiSessionDialog
         open={multiSessionOpen}
-        sessions={[]}
+        sessions={branchSessions}
         currentSessionId={sessionId}
-        onSelectSession={() => {}}
+        onSelectSession={(id) => {
+          onSelectSession?.(id)
+          setMultiSessionOpen(false)
+        }}
         onCompare={() => {}}
         onClose={() => setMultiSessionOpen(false)}
+      />
+      {multiSessionOpen && (
+        <div className="multi-session-create-bar" style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 60 }}>
+          <button
+            className="glass-btn glass-btn--accent"
+            onClick={() => { void handleCreateBranch() }}
+            title="Create parallel branch session"
+          >
+            Create branch
+          </button>
+        </div>
+      )}
+      <MemoryDialog
+        visible={memoryOpen}
+        projectDir={projectDir}
+        projectId={projectId}
+        onClose={() => setMemoryOpen(false)}
+        onEvolve={() => { setMemoryOpen(false); setEvolutionOpen(true) }}
+      />
+      <ImDialog
+        visible={imOpen}
+        sessionId={sessionId}
+        projectId={projectId}
+        onClose={() => setImOpen(false)}
+        onNavigateSession={onSelectSession}
+      />
+      <EvolutionDialog
+        visible={evolutionOpen}
+        projectId={projectId}
+        projectDir={projectDir}
+        sessionId={sessionId}
+        onClose={() => setEvolutionOpen(false)}
+      />
+      <PluginManagerDialog
+        visible={pluginOpen}
+        projectDir={projectDir}
+        onClose={() => setPluginOpen(false)}
+      />
+      <AgentDialog
+        visible={agentOpen}
+        projectId={projectId}
+        onClose={() => setAgentOpen(false)}
+      />
+      <CommandPalettePopover
+        visible={commandPalette.visible}
+        commands={commandPalette.paletteCommands}
+        policyRows={commandPalette.policyRows}
+        loading={commandPalette.loading}
+        searchQuery={commandPalette.searchQuery}
+        onSelect={(cmd) => {
+          inputRef.current?.appendText(`/${cmd.name} `)
+          commandPalette.closePanel()
+        }}
+        onClose={commandPalette.closePanel}
+        onSearchQueryChange={commandPalette.setSearchQuery}
+        onPolicyChange={(row, patch) => { void commandPalette.updateCommandPolicy(row, patch) }}
       />
     </div>
   )
